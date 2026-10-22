@@ -12,7 +12,7 @@ class Action:
 
 
 MODE_HINTS: dict[GameMode, str] = {
-    GameMode.NORMAL: "w:Water x:Prune p:Plant s:Shop i:Inv ::Cmd ?:Help",
+    GameMode.NORMAL: "hl:Pot w:Water f:Fertilize x:Prune p:Plant s:Shop i:Inv ::Cmd ?:Help",
     GameMode.SEED_SELECT: "jk:Select Enter:Plant Esc:Back",
     GameMode.SHOP: "jk:Select b:Buy Esc:Back",
     GameMode.INVENTORY: "jk:Scroll Esc:Back",
@@ -48,7 +48,7 @@ class InputFSM:
         return None
 
     def _handle_normal(self, key: int, context: dict[str, Any]) -> Optional[Action]:
-        # Movement
+        # Movement & Pot selection
         if key in (ord("h"), 260):  # 'h' or KEY_LEFT
             return Action("MOVE", (-1, 0))
         elif key in (ord("l"), 261):  # 'l' or KEY_RIGHT
@@ -57,14 +57,19 @@ class InputFSM:
             return Action("MOVE", (0, -1))
         elif key in (ord("j"), 258):  # 'j' or KEY_DOWN
             return Action("MOVE", (0, 1))
+        elif ord("1") <= key <= ord("5"):
+            return Action("SELECT_POT", key - ord("1"))
 
         # Actions
         elif key == ord("w"):
             return Action("WATER")
+        elif key == ord("f"):
+            return Action("FERTILIZE")
         elif key == ord("p"):
             self.mode = GameMode.SEED_SELECT
             self.selected_index = 0
             return Action("OPEN_SEED_SELECT")
+
         elif key == ord("x"):
             return Action("HARVEST_OR_CLEAR")
         elif key == ord("s"):

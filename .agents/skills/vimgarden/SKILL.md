@@ -100,14 +100,26 @@ All simulation calculations in `simulation.py` are strictly time-delta based:
   - `HEALTHY`: 1.0x growth speed.
   - `THIRSTY`: 0.25x growth speed.
   - `WILTING` / `DEAD`: 0.0x growth speed.
+  - `FERTILIZER`: +50% speed boost while `fertilized_remaining_seconds > 0`.
+  - `SEASONAL AFFINITY`:
+    - Spring: Sakura +35% growth speed.
+    - Summer: Juniper +20% growth speed.
+    - Autumn: Maple +25% growth speed, +35% Zen Coins on pruning.
+    - Winter: Black Pine +20% growth speed.
+- **Dynamic Weather**:
+  - `Rainy`: Automatically waters all living bonsai trees on the Tokonoma shelf.
 - **Stage Progression**:
   - `SEED`: `0%` to `< 25%` of `growth_duration`.
   - `SPROUT`: `25%` to `< 70%` of `growth_duration`.
   - `ADULT`: `70%` to `< 100%` of `growth_duration`.
   - `MATURE`: `100%` of `growth_duration` (can be pruned).
 - **Pruning (`prune_bonsai`)**:
-  - Pruning a `MATURE` plant awards `sell_price` Zen coins.
+  - Pruning a `MATURE` plant awards `sell_price` Zen coins (plus Autumn/Toro Lantern buffs).
   - Rolls growth progress back to `0.70 * growth_duration` (`ADULT` stage), allowing repeat blooming.
+- **Multi-Pot Tokonoma Shelf**:
+  - Starts with 3 pots (`DEFAULT_UNLOCKED_POTS`), expandable up to 5 (`MAX_POTS`) via shop purchase.
+  - Navigate between pots with `h` / `l` or number keys `1` .. `5`.
+
 - **Offline Catch-Up**:
   - Capped at `MAX_OFFLINE_SECONDS` (7 days).
   - If a plant would die during offline catch-up, `WILT_GRACE_BUFFER_SECONDS` (1 hour) holds it at `WILTING` instead of killing it immediately.
@@ -119,12 +131,13 @@ All simulation calculations in `simulation.py` are strictly time-delta based:
 Located in `vimgarden/input_fsm.py`:
 
 - **Modes (`GameMode`)**:
-  - `NORMAL`: Navigation (`hjkl`), action keys (`w`: water, `p`: plant, `x`: prune/clear, `s`: shop, `i`: inventory, `:`: command, `?`: help).
+  - `NORMAL`: Navigation (`h/l` or `1`-`5` to switch active pot), action keys (`w`: water, `f`: fertilize, `p`: plant, `x`: prune/clear, `s`: shop, `i`: inventory, `:`: command, `?`: help).
   - `SEED_SELECT`: Seed selection modal (`j/k` or arrows to pick, `Enter` to plant, `Esc/q` to exit).
-  - `SHOP`: Buying saplings (`b` to purchase).
-  - `INVENTORY`: Viewing current sapling counts.
+  - `SHOP`: Buying saplings, extra pots, fertilizer, and Zen decor (`b` to purchase).
+  - `INVENTORY`: Viewing current sapling and supply counts.
   - `COMMAND`: Vim commands (`:w` save, `:q` quit, `:q!` force quit, `:wq` / `:x` save & quit).
   - `HELP`: Help overlay.
+
 
 When adding a new keybind or mode:
 1. Define the action in `InputFSM.handle_key()`.
@@ -171,3 +184,10 @@ Test files are located in `tests/`:
 - `test_ui.py`: Tests for layout calculations and component helpers without opening real terminal windows.
 
 Always run `python3 -m unittest discover tests` after modifying simulation or storage logic.
+
+---
+
+## 9. Language & Communication Standards
+
+- **Strict English Requirement**: All code, docstrings, identifiers, comments, user-facing UI labels, status messages, CLI tools, scripts (`install.sh`), git commit messages, and documentation (`README.md`, specs) must be strictly written in **English**. Do not use Russian or any non-English text inside repository files or user-facing terminal outputs.
+

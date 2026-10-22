@@ -1,12 +1,30 @@
 """Simulation engine for vimgarden.
 Handles growth, thirst, withering, and offline catch-up.
 """
+import random
 from typing import Optional
 
-from vimgarden.config import MAX_OFFLINE_SECONDS, WILT_GRACE_BUFFER_SECONDS
+from vimgarden.config import (
+    FERTILIZER_BOOST_SECONDS,
+    FERTILIZER_SPEED_MULT,
+    MAX_OFFLINE_SECONDS,
+    SEASON_DURATION,
+    WEATHER_DURATION,
+    WILT_GRACE_BUFFER_SECONDS,
+)
 from vimgarden.data.plants_data import PLANTS
-from vimgarden.enums import GrowthStage, HealthState
+from vimgarden.enums import GrowthStage, HealthState, Season, Weather
 from vimgarden.models import GameState, Plant, PlantType, Plot
+
+SEASONS_CYCLE = [Season.SPRING, Season.SUMMER, Season.AUTUMN, Season.WINTER]
+
+WEATHER_POOLS = {
+    Season.SPRING: [Weather.SUNNY, Weather.RAINY, Weather.MISTY, Weather.WINDY],
+    Season.SUMMER: [Weather.SUNNY, Weather.SUNNY, Weather.WINDY, Weather.RAINY],
+    Season.AUTUMN: [Weather.WINDY, Weather.MISTY, Weather.RAINY, Weather.SUNNY],
+    Season.WINTER: [Weather.MISTY, Weather.WINDY, Weather.SUNNY, Weather.RAINY],
+}
+
 
 
 def _interval_overlap(a_start: float, a_end: float, b_start: float, b_end: float) -> float:
@@ -15,12 +33,35 @@ def _interval_overlap(a_start: float, a_end: float, b_start: float, b_end: float
     return max(0.0, end - start)
 
 
+def update_weather_and_seasons(state: GameState, delta: float, current_time: float) -> None:
+    """Cycle seasons and weather over time; rain auto-waters all living bonsai."""
+    state.season_timer += delta
+    if state.season_timer >= SEASON_DURATION:
+        curr_idx = SEASONS_CYCLE.index(state.season) if state.season in SEASONS_CYCLE else 0
+        state.season = SEASONS_CYCLE[(curr_idx + 1) % len(SEASONS_CYCLE)]
+        state.season_timer = 0.0
+
+    state.weather_timer += delta
+    if state.weather_timer >= WEATHER_DURATION:
+        pool = WEATHER_POOLS.get(state.season, [Weather.SUNNY])
+        state.weather = random.choice(pool)
+        state.weather_timer = 0.0
+
+    if state.weather == Weather.RAINY:
+        for row in state.grid:
+            for plot in row:
+                if plot.plant and plot.plant.health_state != HealthState.DEAD:
+                    plot.plant.last_watered_at = current_time
+                    plot.plant.health_state = HealthState.HEALTHY
+
+
 def update_plant(
     plant: Plant,
     plant_type: PlantType,
     t_from: float,
     t_to: float,
     is_offline_catchup: bool = False,
+    season: Season = Season.SPRING,
 ) -> None:
     """Advance single plant state from t_from to t_to."""
     if plant.health_state == HealthState.DEAD:
@@ -36,13 +77,32 @@ def update_plant(
     # Growth gained during [d0, d1]
     healthy_time = _interval_overlap(d0, d1, 0.0, plant_type.thirst_threshold)
     thirsty_time = _interval_overlap(d0, d1, plant_type.thirst_threshold, plant_type.wilt_threshold)
-    
+
+    # Seasonal affinity multiplier
+    speed_mult = 1.0
+    if season == Season.SPRING and plant.type_id == "sakura":
+        speed_mult += 0.35
+    elif season == Season.SUMMER and plant.type_id == "juniper":
+        speed_mult += 0.20
+    elif season == Season.AUTUMN and plant.type_id == "maple":
+        speed_mult += 0.25
+    elif season == Season.WINTER and plant.type_id == "pine":
+        speed_mult += 0.20
+
+    # Fertilizer boost
+    dt = max(0.0, t_to - t_from)
+    if plant.fertilized_remaining_seconds > 0.0 and dt > 0.0:
+        boosted_time = min(dt, plant.fertilized_remaining_seconds)
+        plant.fertilized_remaining_seconds = max(0.0, plant.fertilized_remaining_seconds - dt)
+        speed_mult += (boosted_time / dt) * (FERTILIZER_SPEED_MULT - 1.0)
+
     # Healthy grows at 1.0x, thirsty at 0.25x, wilting/dead at 0.0x
-    gained_growth = healthy_time * 1.0 + thirsty_time * 0.25
+    gained_growth = (healthy_time * 1.0 + thirsty_time * 0.25) * speed_mult
     plant.effective_growth_seconds = min(
         plant_type.growth_duration,
         plant.effective_growth_seconds + gained_growth,
     )
+
 
     # Determine health state at t_to
     current_dry = t_to - plant.last_watered_at
@@ -95,12 +155,23 @@ def update_simulation(state: GameState, current_time: float, is_offline_catchup:
 
     t_to = current_time
 
+    # 1. Update weather and seasons
+    update_weather_and_seasons(state, delta, current_time)
+
+    # 2. Update all plants
     for row in state.grid:
         for plot in row:
             if plot.plant is not None:
                 plant_type = PLANTS.get(plot.plant.type_id)
                 if plant_type:
-                    update_plant(plot.plant, plant_type, t_from, t_to, is_offline_catchup)
+                    update_plant(
+                        plot.plant,
+                        plant_type,
+                        t_from,
+                        t_to,
+                        is_offline_catchup,
+                        season=state.season,
+                    )
 
     state.last_update_at = current_time
 
@@ -119,10 +190,15 @@ def harvest_plot(plot: Plot) -> Optional[tuple[str, int]]:
     return prune_bonsai(plot)
 
 
-def prune_bonsai(plot: Plot) -> Optional[tuple[str, int]]:
+def prune_bonsai(
+    plot: Plot,
+    season: Optional[Season] = None,
+    decorations: Optional[list[str]] = None,
+) -> Optional[tuple[str, int]]:
     """Prune mature bonsai tree: yields Zen coins without destroying tree,
 
     rolling growth back to ADULT stage so it can grow and bloom again.
+    Applies seasonal bonuses (Maple in Autumn) and decor buffs (Toro Lantern).
     """
     if not plot.plant or plot.plant.growth_stage != GrowthStage.MATURE:
         return None
@@ -131,10 +207,28 @@ def prune_bonsai(plot: Plot) -> Optional[tuple[str, int]]:
     plant_type = PLANTS.get(plot.plant.type_id)
     sell_price = plant_type.sell_price if plant_type else 0
     type_id = plot.plant.type_id
+
+    # Seasonal bonus
+    if season == Season.AUTUMN and type_id == "maple":
+        sell_price = int(sell_price * 1.35)
+
+    # Decor bonus
+    if decorations and "toro_lantern" in decorations:
+        sell_price = int(sell_price * 1.20)
+
     if plant_type:
         plot.plant.effective_growth_seconds = 0.70 * plant_type.growth_duration
         plot.plant.growth_stage = GrowthStage.ADULT
     return type_id, sell_price
+
+
+def fertilize_plot(plot: Plot, duration: float = FERTILIZER_BOOST_SECONDS) -> bool:
+    """Apply organic fertilizer to accelerate growth for the given duration."""
+    if not plot.plant or plot.plant.health_state == HealthState.DEAD:
+        return False
+    plot.plant.fertilized_remaining_seconds += duration
+    return True
+
 
 
 def clear_dead_plot(plot: Plot) -> bool:

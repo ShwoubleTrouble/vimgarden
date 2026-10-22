@@ -2,7 +2,7 @@
 import unittest
 
 from vimgarden.data.plants_data import PLANTS
-from vimgarden.enums import GrowthStage, HealthState
+from vimgarden.enums import GrowthStage, HealthState, Season, Weather
 from vimgarden.models import GameState, Plant, Plot
 from vimgarden.simulation import (
     clear_dead_plot,
@@ -135,6 +135,66 @@ class TestSimulation(unittest.TestCase):
         self.assertIsNotNone(plot.plant)
         self.assertEqual(plot.plant.growth_stage, GrowthStage.ADULT)
 
+    def test_rain_auto_waters_plots(self):
+        plant = Plant(
+            type_id="juniper",
+            planted_at=1000.0,
+            last_watered_at=1000.0,
+            health_state=HealthState.THIRSTY,
+        )
+        state = GameState(
+            grid=[[Plot(x=0, y=0, plant=plant)]],
+            last_update_at=1000.0,
+            weather=Weather.SUNNY,
+        )
+        # Advance simulation and set weather to RAINY
+        state.weather = Weather.RAINY
+        update_simulation(state, current_time=1050.0)
+        self.assertEqual(plant.last_watered_at, 1050.0)
+        self.assertEqual(plant.health_state, HealthState.HEALTHY)
+
+    def test_fertilizer_boost(self):
+        plant_normal = Plant(
+            type_id="juniper",
+            planted_at=1000.0,
+            last_watered_at=1000.0,
+            effective_growth_seconds=0.0,
+        )
+        plant_fertilized = Plant(
+            type_id="juniper",
+            planted_at=1000.0,
+            last_watered_at=1000.0,
+            effective_growth_seconds=0.0,
+            fertilized_remaining_seconds=60.0,
+        )
+        update_plant(plant_normal, self.juniper_type, 1000.0, 1020.0)
+        update_plant(plant_fertilized, self.juniper_type, 1000.0, 1020.0)
+        self.assertGreater(plant_fertilized.effective_growth_seconds, plant_normal.effective_growth_seconds)
+
+    def test_prune_seasonal_and_decor_bonuses(self):
+        maple_type = PLANTS["maple"]
+        plot = Plot(
+            x=0,
+            y=0,
+            plant=Plant(
+                type_id="maple",
+                planted_at=1000.0,
+                last_watered_at=1000.0,
+                effective_growth_seconds=300.0,
+                growth_stage=GrowthStage.MATURE,
+            ),
+        )
+        # Normal prune in Spring
+        _, normal_price = prune_bonsai(plot, season=Season.SPRING)
+        self.assertEqual(normal_price, maple_type.sell_price)
+
+        # Autumn bonus (+35%) + Toro Lantern (+20%)
+        plot.plant.growth_stage = GrowthStage.MATURE
+        _, buffed_price = prune_bonsai(plot, season=Season.AUTUMN, decorations=["toro_lantern"])
+        expected = int(int(maple_type.sell_price * 1.35) * 1.20)
+        self.assertEqual(buffed_price, expected)
+
 
 if __name__ == "__main__":
     unittest.main()
+

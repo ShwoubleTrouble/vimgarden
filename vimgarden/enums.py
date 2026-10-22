@@ -23,3 +23,24 @@ class GameMode(Enum):
     INVENTORY = auto()
     COMMAND = auto()
     HELP = auto()
+
+
+class Season(str, Enum):
+    SPRING = "Spring"
+    SUMMER = "Summer"
+    AUTUMN = "Autumn"
+    WINTER = "Winter"
+
+
+class Weather(str, Enum):
+    SUNNY = "Sunny"
+    RAINY = "Rainy"
+    MISTY = "Misty"
+    WINDY = "Windy"
+
+
+class BonsaiStyle(str, Enum):
+    CHOKKAN = "Formal Upright"
+    MOYOGI = "Informal Upright"
+    KENGAI = "Cascade"
+

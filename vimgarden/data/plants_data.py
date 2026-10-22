@@ -43,3 +43,35 @@ PLANTS: dict[str, PlantType] = {
         death_threshold=900.0,
     ),
 }
+
+SHOP_ITEMS: dict[str, dict[str, str | int]] = {
+    "fertilizer": {
+        "id": "fertilizer",
+        "name": "Organic Fertilizer",
+        "price": 15,
+        "type": "supply",
+        "desc": "+50% growth speed for 90s",
+    },
+    "pot_slot": {
+        "id": "pot_slot",
+        "name": "Tokonoma Pot Slot",
+        "price": 75,
+        "type": "upgrade",
+        "desc": "Expands shelf capacity by +1 pot",
+    },
+    "toro_lantern": {
+        "id": "toro_lantern",
+        "name": "Toro Stone Lantern",
+        "price": 120,
+        "type": "decor",
+        "desc": "Traditional granite garden lantern (+20% Zen Coin bonus)",
+    },
+    "furin_chime": {
+        "id": "furin_chime",
+        "name": "Furin Wind Chime",
+        "price": 60,
+        "type": "decor",
+        "desc": "Soothes the bonsai with pleasant bell sounds",
+    },
+}
+

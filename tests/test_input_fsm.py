@@ -83,6 +83,22 @@ class TestInputFSM(unittest.TestCase):
         self.assertEqual(act.type, "QUIT")
         self.assertTrue(act.payload)  # forced
 
+    def test_fertilize_and_pot_select_keys(self):
+        context = {}
+        # Press 'f' -> FERTILIZE
+        act = self.fsm.handle_key(ord("f"), context)
+        self.assertEqual(act.type, "FERTILIZE")
+
+        # Press '1' .. '3' -> SELECT_POT
+        act1 = self.fsm.handle_key(ord("1"), context)
+        self.assertEqual(act1.type, "SELECT_POT")
+        self.assertEqual(act1.payload, 0)
+
+        act3 = self.fsm.handle_key(ord("3"), context)
+        self.assertEqual(act3.type, "SELECT_POT")
+        self.assertEqual(act3.payload, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -86,6 +86,21 @@ class TestStorage(unittest.TestCase):
             loaded = load_game()
             self.assertEqual(loaded.money, 77)
 
+    def test_environment_and_legacy_carrot_migration(self):
+        legacy_data = {
+            "version": 1,
+            "player": {"money": 40, "inventory": {"carrot": 5}},
+            "grid": {"plots": [{"x": 0, "y": 0, "plant": {"type_id": "carrot", "planted_at": 1.0, "last_watered_at": 1.0}}]},
+        }
+        state = dict_to_state(legacy_data)
+        # Carrot should be migrated to juniper
+        self.assertNotIn("carrot", state.inventory)
+        self.assertEqual(state.inventory.get("juniper"), 5)
+        self.assertEqual(state.grid[0][0].plant.type_id, "juniper")
+        # Should have at least 3 pots on the Tokonoma shelf
+        self.assertGreaterEqual(len(state.grid[0]), 3)
+
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -3,7 +3,7 @@ import curses
 from typing import Optional
 
 from vimgarden.config import MIN_COLS, MIN_LINES
-from vimgarden.data.plants_data import PLANTS
+from vimgarden.data.plants_data import PLANTS, SHOP_ITEMS
 from vimgarden.enums import GameMode
 from vimgarden.input_fsm import InputFSM
 from vimgarden.models import GameState, Plot
@@ -14,9 +14,11 @@ from vimgarden.ui.components import (
     draw_help_modal,
     draw_inventory_modal,
     draw_seed_select_modal,
+    draw_shelf_bar,
     draw_shop_modal,
 )
 from vimgarden.ui.layout import calculate_layout
+
 
 
 class Renderer:
@@ -73,20 +75,23 @@ class Renderer:
 
         layout = calculate_layout(h, w)
 
-        # 1. Header
+        # 1. Header & Tokonoma Shelf
         draw_header(self.stdscr, state, w)
+        draw_shelf_bar(self.stdscr, state, layout.shelf_y + 1, w)
 
-        # 2. Central Bonsai Pot
-        plot: Plot = state.grid[0][0] if state.grid and state.grid[0] else Plot(x=0, y=0)
+        # 2. Central Active Bonsai Pot
+        active_x = max(0, min(len(state.grid[0]) - 1, state.cursor_x)) if state.grid and state.grid[0] else 0
+        plot: Plot = state.grid[0][active_x] if state.grid and state.grid[0] else Plot(x=0, y=0)
         draw_bonsai_pot(self.stdscr, plot, layout.pot_start_y, layout.pot_start_x)
 
         # 3. Modals
         if fsm.mode == GameMode.SEED_SELECT:
-            available_seeds = [s for s, count in state.inventory.items() if count > 0]
+            available_seeds = [s for s, count in state.inventory.items() if count > 0 and s in PLANTS]
             draw_seed_select_modal(self.stdscr, available_seeds, fsm.selected_index, h, w)
         elif fsm.mode == GameMode.SHOP:
-            shop_items = list(PLANTS.keys())
+            shop_items = list(PLANTS.keys()) + list(SHOP_ITEMS.keys())
             draw_shop_modal(self.stdscr, shop_items, state.money, fsm.selected_index, h, w)
+
         elif fsm.mode == GameMode.INVENTORY:
             draw_inventory_modal(self.stdscr, state.inventory, h, w)
         elif fsm.mode == GameMode.HELP:

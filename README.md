@@ -22,7 +22,12 @@ A terminal-based Zen Bonsai simulation game written in Python using `curses` wit
 ```bash
 git clone https://github.com/ShwoubleTrouble/vimgarden.git
 cd vimgarden
-pip install -e .
+
+# Lightweight install to ~/.local/bin/ (no pip/venv overhead):
+./install.sh
+
+# Or uninstall:
+./install.sh --uninstall
 ```
 
 ## Running
