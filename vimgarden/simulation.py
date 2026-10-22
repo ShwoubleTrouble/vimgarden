@@ -225,14 +225,36 @@ def prune_bonsai(
 
     # Tree Age multiplier (older trees are more valuable)
     if current_time and plot.plant.planted_at > 0.0:
-        years = max(1, int((current_time - plot.plant.planted_at) // 360) + 1)
-        age_multiplier = 1.0 + min(1.0, (years - 1) * 0.10)
+        elapsed = max(0.0, current_time - plot.plant.planted_at)
+        days = elapsed / 86400.0
+        # +5% bonus per real-world day of care, capped at +100%
+        age_multiplier = 1.0 + min(1.0, days * 0.05)
         sell_price = int(sell_price * age_multiplier)
 
     if plant_type:
         plot.plant.effective_growth_seconds = 0.70 * plant_type.growth_duration
         plot.plant.growth_stage = GrowthStage.ADULT
     return type_id, sell_price
+
+
+def format_tree_age(planted_at: float, current_time: float) -> str:
+    """Format real-world elapsed tree age (e.g. '15m', '10h', '3d', '2mo', '1y')."""
+    if planted_at <= 0.0:
+        return "new"
+    delta = max(0.0, current_time - planted_at)
+    if delta < 60.0:
+        return f"{int(delta)}s"
+    elif delta < 3600.0:
+        return f"{int(delta // 60)}m"
+    elif delta < 86400.0:
+        return f"{int(delta // 3600)}h"
+    elif delta < 86400.0 * 30:
+        return f"{int(delta // 86400)}d"
+    elif delta < 86400.0 * 365:
+        return f"{int(delta // (86400 * 30))}mo"
+    else:
+        return f"{int(delta // (86400 * 365))}y"
+
 
 
 

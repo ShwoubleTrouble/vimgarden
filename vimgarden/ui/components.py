@@ -8,6 +8,7 @@ from vimgarden.data.ascii_art import EMPTY_POT, get_plant_art
 from vimgarden.data.plants_data import PLANTS, SHOP_ITEMS
 from vimgarden.enums import GrowthStage, HealthState, Season, Weather
 from vimgarden.models import GameState, Plot
+from vimgarden.simulation import format_tree_age
 
 STAGE_NAMES: dict[GrowthStage, str] = {
     GrowthStage.SEED: "Sprout",
@@ -155,11 +156,11 @@ def draw_bonsai_pot(
         plant_name = plant_type.name if plant_type else plot.plant.type_id.capitalize()
         stage_name = STAGE_NAMES.get(plot.plant.growth_stage, "Sprout")
 
-        # Tree Age calculation (1 year = 360s)
+        # Real-world tree age calculation (minutes, hours, days, months, years)
         now_ts = datetime.datetime.now().timestamp()
-        age_years = max(1, int((now_ts - plot.plant.planted_at) // 360) + 1) if plot.plant.planted_at > 0 else 1
-        age_str = f"{age_years}y"
+        age_str = format_tree_age(plot.plant.planted_at, now_ts)
         style_short = plot.plant.style.value.split()[0]
+
 
         if plot.plant.growth_stage == GrowthStage.MATURE:
             line1 = f"{plant_name} — {stage_name} [{style_short}, {age_str}] (Prune!)"

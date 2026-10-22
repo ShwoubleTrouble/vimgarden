@@ -208,12 +208,20 @@ class TestSimulation(unittest.TestCase):
                 style=BonsaiStyle.KENGAI,
             ),
         )
-        # Pruning with KENGAI (+25%) and age (after 720s -> 3 years -> +20%)
-        # Base sell_price: 35
-        # With KENGAI: int(35 * 1.25) = 43
-        # With age (3 yrs): int(43 * 1.20) = 51
-        _, price = prune_bonsai(plot, current_time=1720.0)
-        self.assertEqual(price, 51)
+        # Base sell_price = 35. KENGAI (+25%) -> 43.
+        # After 10 days (864000s) -> +50% -> int(43 * 1.50) = 64
+        _, price = prune_bonsai(plot, current_time=1000.0 + 864000.0)
+        self.assertEqual(price, 64)
+
+    def test_format_tree_age(self):
+        from vimgarden.simulation import format_tree_age
+        self.assertEqual(format_tree_age(100.0, 130.0), "30s")
+        self.assertEqual(format_tree_age(100.0, 700.0), "10m")
+        self.assertEqual(format_tree_age(100.0, 100.0 + 3600.0 * 5), "5h")
+        self.assertEqual(format_tree_age(100.0, 100.0 + 86400.0 * 3), "3d")
+        self.assertEqual(format_tree_age(100.0, 100.0 + 86400.0 * 45), "1mo")
+        self.assertEqual(format_tree_age(100.0, 100.0 + 86400.0 * 400), "1y")
+
 
 
 if __name__ == "__main__":

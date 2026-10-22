@@ -115,13 +115,14 @@ All simulation calculations in `simulation.py` are strictly time-delta based:
   - `MATURE`: `100%` of `growth_duration` (can be pruned).
 - **Pruning (`prune_bonsai`)**:
   - Pruning a `MATURE` plant awards `sell_price` Zen coins.
-  - Multiplied by tree age (+10% per game year up to +100% max).
+  - Multiplied by real-world tree age (+5% per elapsed day of care up to +100% max).
   - Multiplied by bonsai style (Cascade/Kengai +25%, Formal/Chokkan +15%).
   - Multiplied by seasonal and decor buffs (Autumn Maple +35%, Toro Lantern +20%).
   - Rolls growth progress back to `0.70 * growth_duration` (`ADULT` stage), allowing repeat blooming.
-- **Tree Age & Bonsai Styles**:
-  - Trees age over time (1 game year = 360 seconds). Age is displayed on the pot badge.
+- **Real-World Tree Age & Bonsai Styles**:
+  - Trees age in real-world time elapsed since planting (`s`, `m`, `h`, `d`, `mo`, `y`).
   - Copper Wire tool in shop allows shaping trees (`c` key) into Formal Upright (`CHOKKAN`), Informal Upright (`MOYOGI`), and Cascade (`KENGAI`).
+
 - **Multi-Pot Tokonoma Shelf**:
 
   - Starts with 3 pots (`DEFAULT_UNLOCKED_POTS`), expandable up to 5 (`MAX_POTS`) via shop purchase.
