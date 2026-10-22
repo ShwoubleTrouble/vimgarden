@@ -253,7 +253,12 @@ def main(stdscr: curses.window) -> None:
 
 def cli() -> None:
     """Console script entry point."""
+    if len(sys.argv) > 1 and sys.argv[1] in ("--version", "-v"):
+        from vimgarden import get_version_string
+        print(f"vimgarden {get_version_string()}")
+        sys.exit(0)
     curses.wrapper(main)
+
 
 
 if __name__ == "__main__":

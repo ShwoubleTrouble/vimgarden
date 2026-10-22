@@ -3,6 +3,7 @@ import curses
 import datetime
 from typing import Optional
 
+from vimgarden import get_version_string
 from vimgarden.data.ascii_art import EMPTY_POT, get_plant_art
 from vimgarden.data.plants_data import PLANTS, SHOP_ITEMS
 from vimgarden.enums import GrowthStage, HealthState, Season, Weather
@@ -44,7 +45,8 @@ def draw_header(stdscr: curses.window, state: GameState, width: int) -> None:
     pots_count = len(state.grid[0]) if state.grid and state.grid[0] else 1
 
     left_str = f" ${state.money} Zen Coins | {season_str} | {weather_str}"
-    right_str = f"Pot [{state.cursor_x + 1}/{pots_count}] | vimgarden "
+    right_str = f"Pot [{state.cursor_x + 1}/{pots_count}] | vimgarden {get_version_string()} "
+
 
     pad = max(0, width - len(left_str) - len(right_str))
     full_str = (left_str + (" " * pad) + right_str)[:width]

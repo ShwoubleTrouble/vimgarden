@@ -191,3 +191,18 @@ Always run `python3 -m unittest discover tests` after modifying simulation or st
 
 - **Strict English Requirement**: All code, docstrings, identifiers, comments, user-facing UI labels, status messages, CLI tools, scripts (`install.sh`), git commit messages, and documentation (`README.md`, specs) must be strictly written in **English**. Do not use Russian or any non-English text inside repository files or user-facing terminal outputs.
 
+---
+
+## 10. Versioning & Git Release Conventions
+
+- **Semantic Versioning (`vX.Y.Z`)**: Follow semver conventions:
+  - `v0.1.0`: Initial baseline release.
+  - `v0.2.0`: Tokonoma multi-pot shelf, seasons, weather, tools, organic ASCII art.
+- **Syncing Version Strings**:
+  - Keep `pyproject.toml` (`version = "X.Y.Z"`) and `vimgarden/__init__.py` (`__version__ = "X.Y.Z"`) synchronized.
+- **Dynamic Git Hash**:
+  - The runtime helper `get_version_string()` in `vimgarden/__init__.py` dynamically appends the short git commit hash (e.g. `v0.2.0 (a7e8221)`) in the header and `--version` CLI output.
+- **Git Tags**:
+  - For milestone releases, tag the commit: `git tag -a vX.Y.Z -m "Release vX.Y.Z"` and push with `git push origin vX.Y.Z`.
+
+
