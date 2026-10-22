@@ -1,0 +1,181 @@
+"""Storage management for saving and loading game state atomically with backups."""
+import json
+import logging
+import os
+import shutil
+import time
+from typing import Any, Optional
+
+from vimgarden.config import BACKUP_SAVE_FILE, SAVE_DIR, SAVE_FILE
+from vimgarden.models import GameState, Plant, Plot
+from vimgarden.simulation import update_simulation
+
+logger = logging.getLogger(__name__)
+
+
+def create_default_state() -> GameState:
+    """Create fresh game state with a single bonsai pot and starter tree."""
+    now = time.time()
+    starter_plant = Plant(
+        type_id="juniper",
+        planted_at=now,
+        last_watered_at=now,
+        effective_growth_seconds=0.0,
+    )
+    grid = [[Plot(x=0, y=0, plant=starter_plant)]]
+    return GameState(
+        version=2,
+        money=30,
+        inventory={"juniper": 1},
+        grid=grid,
+        cursor_x=0,
+        cursor_y=0,
+        last_update_at=now,
+    )
+
+
+def state_to_dict(state: GameState) -> dict[str, Any]:
+    """Serialize GameState to dict."""
+    plots_data = []
+    for row in state.grid:
+        for plot in row:
+            p_data: dict[str, Any] = {
+                "x": plot.x,
+                "y": plot.y,
+                "is_unlocked": plot.is_unlocked,
+                "plant": None,
+            }
+            if plot.plant:
+                p_data["plant"] = {
+                    "type_id": plot.plant.type_id,
+                    "planted_at": plot.plant.planted_at,
+                    "last_watered_at": plot.plant.last_watered_at,
+                    "effective_growth_seconds": plot.plant.effective_growth_seconds,
+                }
+            plots_data.append(p_data)
+
+    return {
+        "version": state.version,
+        "saved_at": time.time(),
+        "player": {
+            "money": state.money,
+            "inventory": dict(state.inventory),
+        },
+        "grid": {
+            "width": len(state.grid[0]) if state.grid else 3,
+            "height": len(state.grid),
+            "cursor": [state.cursor_x, state.cursor_y],
+            "plots": plots_data,
+        },
+    }
+
+
+def dict_to_state(data: dict[str, Any]) -> GameState:
+    """Deserialize dict to GameState."""
+    version = data.get("version", 1)
+    player_data = data.get("player", {})
+    money = player_data.get("money", 50)
+    inventory = player_data.get("inventory", {"carrot": 3})
+
+    grid_data = data.get("grid", {})
+    width = grid_data.get("width", 3)
+    height = grid_data.get("height", 3)
+    cursor = grid_data.get("cursor", [0, 0])
+    cursor_x = cursor[0] if len(cursor) > 0 else 0
+    cursor_y = cursor[1] if len(cursor) > 1 else 0
+
+    plots_raw = grid_data.get("plots", [])
+    plot_map: dict[tuple[int, int], Plot] = {}
+    for pr in plots_raw:
+        x, y = pr["x"], pr["y"]
+        plant_obj: Optional[Plant] = None
+        if pr.get("plant"):
+            p_dict = pr["plant"]
+            raw_type = p_dict["type_id"]
+            # Migrate legacy vegetable names to bonsai
+            if raw_type not in ("juniper", "sakura", "maple", "pine"):
+                raw_type = "juniper"
+            plant_obj = Plant(
+                type_id=raw_type,
+                planted_at=p_dict["planted_at"],
+                last_watered_at=p_dict["last_watered_at"],
+                effective_growth_seconds=p_dict.get("effective_growth_seconds", 0.0),
+            )
+        plot_map[(x, y)] = Plot(
+            x=x,
+            y=y,
+            plant=plant_obj,
+            is_unlocked=pr.get("is_unlocked", True),
+        )
+
+    # Force single 1x1 bonsai pot
+    first_plot = plot_map.get((0, 0))
+    if not first_plot and plot_map:
+        # Pick first available plot if (0,0) was empty
+        first_plot = next((p for p in plot_map.values() if p.plant is not None), None)
+    if not first_plot:
+        first_plot = Plot(x=0, y=0)
+    first_plot.x = 0
+    first_plot.y = 0
+    grid = [[first_plot]]
+
+    saved_at = data.get("saved_at", time.time())
+    return GameState(
+        version=version,
+        money=money,
+        inventory=inventory,
+        grid=grid,
+        cursor_x=cursor_x,
+        cursor_y=cursor_y,
+        last_update_at=saved_at,
+    )
+
+
+def save_game(state: GameState) -> bool:
+    """Atomically save game state to SAVE_FILE with backup copy."""
+    try:
+        SAVE_DIR.mkdir(parents=True, exist_ok=True)
+        data = state_to_dict(state)
+        tmp_file = SAVE_DIR / f"save.json.tmp.{os.getpid()}"
+
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+
+        # If current save file exists, back it up first
+        if SAVE_FILE.exists():
+            try:
+                shutil.copy2(SAVE_FILE, BACKUP_SAVE_FILE)
+            except OSError:
+                pass
+
+        # Atomic replacement
+        os.replace(tmp_file, SAVE_FILE)
+        return True
+    except Exception as exc:
+        logger.error("Failed to save game: %s", exc)
+        return False
+
+
+def load_game() -> GameState:
+    """Load game state from SAVE_FILE or BACKUP_SAVE_FILE, or return default state."""
+    state: Optional[GameState] = None
+
+    for target_path in (SAVE_FILE, BACKUP_SAVE_FILE):
+        if target_path.exists():
+            try:
+                with open(target_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                state = dict_to_state(data)
+                break
+            except Exception as exc:
+                logger.warning("Failed to load %s: %s", target_path, exc)
+
+    if state is None:
+        state = create_default_state()
+    else:
+        # Run offline catchup immediately
+        update_simulation(state, current_time=time.time(), is_offline_catchup=True)
+
+    return state

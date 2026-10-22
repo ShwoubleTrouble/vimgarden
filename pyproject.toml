@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vimgarden"
+version = "0.1.0"
+description = "Terminal-based Zen Bonsai simulation game with Vim-like controls"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "GPL-3.0-only" }
+authors = [
+    { name = "shwouble", email = "shwoublee@proton.me" }
+]
+keywords = ["bonsai", "curses", "terminal-game", "vim", "simulation"]
+classifiers = [
+    "Environment :: Console :: Curses",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Games/Entertainment :: Simulation",
+]
+
+[project.scripts]
+vimgarden = "vimgarden.__main__:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["vimgarden*"]
