@@ -45,6 +45,7 @@ def main(stdscr: curses.window) -> None:
     signal.signal(signal.SIGTERM, _signal_handler)
 
     running = True
+    should_save_on_exit = True
     status_message = "Welcome to Bonsai Zen! Press ? for guide."
     last_auto_save = time.time()
     has_unsaved_changes = False
@@ -254,6 +255,8 @@ def main(stdscr: curses.window) -> None:
                         status_message = "No write since last change (add ! to override)"
                     else:
                         running = False
+                        if force:
+                            should_save_on_exit = False
 
                 elif action.type == "SAVE_AND_QUIT":
                     save_game(state)
@@ -268,8 +271,10 @@ def main(stdscr: curses.window) -> None:
         # 4. Render
         renderer.render(state, fsm, status_message)
 
-    # Persist on normal exit
-    save_game(state)
+    # Persist on normal exit (unless forced quit with :q!)
+    if should_save_on_exit:
+        save_game(state)
+
 
 
 def cli() -> None:

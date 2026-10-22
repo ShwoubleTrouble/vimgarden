@@ -155,10 +155,7 @@ def update_simulation(state: GameState, current_time: float, is_offline_catchup:
 
     t_to = current_time
 
-    # 1. Update weather and seasons
-    update_weather_and_seasons(state, delta, current_time)
-
-    # 2. Update all plants
+    # 1. Update all plants growth across [t_from, t_to]
     for row in state.grid:
         for plot in row:
             if plot.plant is not None:
@@ -173,7 +170,11 @@ def update_simulation(state: GameState, current_time: float, is_offline_catchup:
                         season=state.season,
                     )
 
+    # 2. Advance seasons and weather; rain auto-waters plants at current_time
+    update_weather_and_seasons(state, delta, current_time)
+
     state.last_update_at = current_time
+
 
 
 def water_plot(plot: Plot, current_time: float) -> bool:

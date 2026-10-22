@@ -7,9 +7,13 @@ import time
 from typing import Any, Optional
 
 from vimgarden.config import BACKUP_SAVE_FILE, DEFAULT_UNLOCKED_POTS, SAVE_DIR, SAVE_FILE
+from vimgarden.data.plants_data import PLANTS
 from vimgarden.enums import BonsaiStyle, Season, Weather
 from vimgarden.models import GameState, Plant, Plot
 from vimgarden.simulation import update_simulation
+
+CORRUPT_SAVE_FILE = SAVE_DIR / "save.json.corrupt"
+
 
 
 logger = logging.getLogger(__name__)
@@ -132,8 +136,9 @@ def dict_to_state(data: dict[str, Any]) -> GameState:
         if pr.get("plant"):
             p_dict = pr["plant"]
             raw_type = p_dict["type_id"]
-            if raw_type not in ("juniper", "sakura", "maple", "pine"):
+            if raw_type not in PLANTS:
                 raw_type = "juniper"
+
 
             style_val = p_dict.get("style", BonsaiStyle.MOYOGI.value)
             try:
@@ -193,10 +198,10 @@ def dict_to_state(data: dict[str, Any]) -> GameState:
 
 def save_game(state: GameState) -> bool:
     """Atomically save game state to SAVE_FILE with backup copy."""
+    tmp_file = SAVE_DIR / f"save.json.tmp.{os.getpid()}"
     try:
         SAVE_DIR.mkdir(parents=True, exist_ok=True)
         data = state_to_dict(state)
-        tmp_file = SAVE_DIR / f"save.json.tmp.{os.getpid()}"
 
         with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
@@ -216,21 +221,40 @@ def save_game(state: GameState) -> bool:
     except Exception as exc:
         logger.error("Failed to save game: %s", exc)
         return False
+    finally:
+        if tmp_file.exists():
+            try:
+                tmp_file.unlink()
+            except OSError:
+                pass
 
 
 def load_game() -> GameState:
     """Load game state from SAVE_FILE or BACKUP_SAVE_FILE, or return default state."""
     state: Optional[GameState] = None
 
-    for target_path in (SAVE_FILE, BACKUP_SAVE_FILE):
-        if target_path.exists():
+    # 1. Try loading primary save file
+    if SAVE_FILE.exists():
+        try:
+            with open(SAVE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            state = dict_to_state(data)
+        except Exception as exc:
+            logger.warning("Failed to load %s: %s; preserving as corrupt", SAVE_FILE, exc)
             try:
-                with open(target_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                state = dict_to_state(data)
-                break
-            except Exception as exc:
-                logger.warning("Failed to load %s: %s", target_path, exc)
+                SAVE_DIR.mkdir(parents=True, exist_ok=True)
+                shutil.move(SAVE_FILE, CORRUPT_SAVE_FILE)
+            except OSError:
+                pass
+
+    # 2. If primary failed or missing, try backup save file
+    if state is None and BACKUP_SAVE_FILE.exists():
+        try:
+            with open(BACKUP_SAVE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            state = dict_to_state(data)
+        except Exception as exc:
+            logger.warning("Failed to load backup %s: %s", BACKUP_SAVE_FILE, exc)
 
     if state is None:
         state = create_default_state()
@@ -239,3 +263,4 @@ def load_game() -> GameState:
         update_simulation(state, current_time=time.time(), is_offline_catchup=True)
 
     return state
+

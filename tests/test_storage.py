@@ -70,9 +70,11 @@ class TestStorage(unittest.TestCase):
             self.assertEqual(s_data["player"]["money"], 100)
 
     def test_corrupted_save_fallback(self):
+        corrupt_file = self.test_dir / "save.json.corrupt"
         with patch("vimgarden.storage.SAVE_DIR", self.test_dir), \
              patch("vimgarden.storage.SAVE_FILE", self.save_file), \
-             patch("vimgarden.storage.BACKUP_SAVE_FILE", self.backup_file):
+             patch("vimgarden.storage.BACKUP_SAVE_FILE", self.backup_file), \
+             patch("vimgarden.storage.CORRUPT_SAVE_FILE", corrupt_file):
             
             # Write good backup
             valid_state = GameState(money=77)
@@ -85,6 +87,17 @@ class TestStorage(unittest.TestCase):
 
             loaded = load_game()
             self.assertEqual(loaded.money, 77)
+            # Primary corrupted file should be safely preserved as .corrupt
+            self.assertTrue(corrupt_file.exists())
+            self.assertFalse(self.save_file.exists())
+
+            # Next save should create a new save.json and not corrupt backup
+            save_game(loaded)
+            self.assertTrue(self.save_file.exists())
+            with open(self.backup_file, "r") as f:
+                b_data = json.load(f)
+            self.assertEqual(b_data["player"]["money"], 77)
+
 
     def test_environment_and_legacy_carrot_migration(self):
         legacy_data = {
