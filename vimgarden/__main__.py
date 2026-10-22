@@ -8,7 +8,7 @@ from typing import Optional
 
 from vimgarden.config import AUTO_SAVE_INTERVAL, MAX_POTS, TICK_TIMEOUT_MS
 from vimgarden.data.plants_data import PLANTS, SHOP_ITEMS
-from vimgarden.enums import GameMode, GrowthStage, HealthState
+from vimgarden.enums import BonsaiStyle, GameMode, GrowthStage, HealthState
 from vimgarden.input_fsm import InputFSM
 from vimgarden.models import GameState, Plant, Plot
 from vimgarden.simulation import (
@@ -124,6 +124,25 @@ def main(stdscr: curses.window) -> None:
                         has_unsaved_changes = True
                         status_message = "Applied Organic Fertilizer (+50% growth speed)!"
 
+                elif action.type == "WIRE_STYLE":
+                    if not curr_plot or not curr_plot.plant:
+                        status_message = "No bonsai in this pot to shape."
+                    elif curr_plot.plant.health_state == HealthState.DEAD:
+                        status_message = "Cannot shape a dead bonsai."
+                    elif state.inventory.get("copper_wire", 0) <= 0:
+                        status_message = "Need Copper Wire! Buy in Nursery Shop ('s')."
+                    else:
+                        style_cycle = [BonsaiStyle.MOYOGI, BonsaiStyle.KENGAI, BonsaiStyle.CHOKKAN]
+                        curr_idx = style_cycle.index(curr_plot.plant.style) if curr_plot.plant.style in style_cycle else 0
+                        new_style = style_cycle[(curr_idx + 1) % len(style_cycle)]
+                        curr_plot.plant.style = new_style
+                        state.inventory["copper_wire"] -= 1
+                        if state.inventory["copper_wire"] <= 0:
+                            del state.inventory["copper_wire"]
+                        has_unsaved_changes = True
+                        status_message = f"Wired branch into {new_style.value} style!"
+
+
                 elif action.type == "OPEN_SEED_SELECT":
                     if not curr_plot:
                         status_message = "Invalid pot."
@@ -167,7 +186,9 @@ def main(stdscr: curses.window) -> None:
                             curr_plot,
                             season=state.season,
                             decorations=state.decorations,
+                            current_time=curr_time,
                         )
+
                         if result:
                             type_id, sell_price = result
                             state.money += sell_price

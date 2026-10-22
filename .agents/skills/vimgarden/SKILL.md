@@ -114,9 +114,16 @@ All simulation calculations in `simulation.py` are strictly time-delta based:
   - `ADULT`: `70%` to `< 100%` of `growth_duration`.
   - `MATURE`: `100%` of `growth_duration` (can be pruned).
 - **Pruning (`prune_bonsai`)**:
-  - Pruning a `MATURE` plant awards `sell_price` Zen coins (plus Autumn/Toro Lantern buffs).
+  - Pruning a `MATURE` plant awards `sell_price` Zen coins.
+  - Multiplied by tree age (+10% per game year up to +100% max).
+  - Multiplied by bonsai style (Cascade/Kengai +25%, Formal/Chokkan +15%).
+  - Multiplied by seasonal and decor buffs (Autumn Maple +35%, Toro Lantern +20%).
   - Rolls growth progress back to `0.70 * growth_duration` (`ADULT` stage), allowing repeat blooming.
+- **Tree Age & Bonsai Styles**:
+  - Trees age over time (1 game year = 360 seconds). Age is displayed on the pot badge.
+  - Copper Wire tool in shop allows shaping trees (`c` key) into Formal Upright (`CHOKKAN`), Informal Upright (`MOYOGI`), and Cascade (`KENGAI`).
 - **Multi-Pot Tokonoma Shelf**:
+
   - Starts with 3 pots (`DEFAULT_UNLOCKED_POTS`), expandable up to 5 (`MAX_POTS`) via shop purchase.
   - Navigate between pots with `h` / `l` or number keys `1` .. `5`.
 
@@ -131,7 +138,8 @@ All simulation calculations in `simulation.py` are strictly time-delta based:
 Located in `vimgarden/input_fsm.py`:
 
 - **Modes (`GameMode`)**:
-  - `NORMAL`: Navigation (`h/l` or `1`-`5` to switch active pot), action keys (`w`: water, `f`: fertilize, `p`: plant, `x`: prune/clear, `s`: shop, `i`: inventory, `:`: command, `?`: help).
+  - `NORMAL`: Navigation (`h/l` or `1`-`5` to switch active pot), action keys (`w`: water, `f`: fertilize, `c`: wire/style, `p`: plant, `x`: prune/clear, `s`: shop, `i`: inventory, `:`: command, `?`: help).
+
   - `SEED_SELECT`: Seed selection modal (`j/k` or arrows to pick, `Enter` to plant, `Esc/q` to exit).
   - `SHOP`: Buying saplings, extra pots, fertilizer, and Zen decor (`b` to purchase).
   - `INVENTORY`: Viewing current sapling and supply counts.

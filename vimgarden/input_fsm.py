@@ -12,7 +12,7 @@ class Action:
 
 
 MODE_HINTS: dict[GameMode, str] = {
-    GameMode.NORMAL: "hl:Pot w:Water f:Fertilize x:Prune p:Plant s:Shop i:Inv ::Cmd ?:Help",
+    GameMode.NORMAL: "hl:Pot w:Water f:Fert c:Style x:Prune p:Plant s:Shop i:Inv ::Cmd ?:Help",
     GameMode.SEED_SELECT: "jk:Select Enter:Plant Esc:Back",
     GameMode.SHOP: "jk:Select b:Buy Esc:Back",
     GameMode.INVENTORY: "jk:Scroll Esc:Back",
@@ -65,6 +65,8 @@ class InputFSM:
             return Action("WATER")
         elif key == ord("f"):
             return Action("FERTILIZE")
+        elif key == ord("c"):
+            return Action("WIRE_STYLE")
         elif key == ord("p"):
             self.mode = GameMode.SEED_SELECT
             self.selected_index = 0

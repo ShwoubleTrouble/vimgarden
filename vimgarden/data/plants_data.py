@@ -52,6 +52,13 @@ SHOP_ITEMS: dict[str, dict[str, str | int]] = {
         "type": "supply",
         "desc": "+50% growth speed for 90s",
     },
+    "copper_wire": {
+        "id": "copper_wire",
+        "name": "Copper Bonsai Wire",
+        "price": 25,
+        "type": "tool",
+        "desc": "Shape bonsai style ('c' to train)",
+    },
     "pot_slot": {
         "id": "pot_slot",
         "name": "Tokonoma Pot Slot",

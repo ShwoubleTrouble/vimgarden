@@ -2,7 +2,7 @@
 import unittest
 
 from vimgarden.data.plants_data import PLANTS
-from vimgarden.enums import GrowthStage, HealthState, Season, Weather
+from vimgarden.enums import BonsaiStyle, GrowthStage, HealthState, Season, Weather
 from vimgarden.models import GameState, Plant, Plot
 from vimgarden.simulation import (
     clear_dead_plot,
@@ -194,7 +194,29 @@ class TestSimulation(unittest.TestCase):
         expected = int(int(maple_type.sell_price * 1.35) * 1.20)
         self.assertEqual(buffed_price, expected)
 
+    def test_tree_age_and_style_bonuses(self):
+        juniper_type = PLANTS["juniper"]
+        plot = Plot(
+            x=0,
+            y=0,
+            plant=Plant(
+                type_id="juniper",
+                planted_at=1000.0,
+                last_watered_at=1000.0,
+                effective_growth_seconds=90.0,
+                growth_stage=GrowthStage.MATURE,
+                style=BonsaiStyle.KENGAI,
+            ),
+        )
+        # Pruning with KENGAI (+25%) and age (after 720s -> 3 years -> +20%)
+        # Base sell_price: 35
+        # With KENGAI: int(35 * 1.25) = 43
+        # With age (3 yrs): int(43 * 1.20) = 51
+        _, price = prune_bonsai(plot, current_time=1720.0)
+        self.assertEqual(price, 51)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

@@ -155,12 +155,19 @@ def draw_bonsai_pot(
         plant_name = plant_type.name if plant_type else plot.plant.type_id.capitalize()
         stage_name = STAGE_NAMES.get(plot.plant.growth_stage, "Sprout")
 
+        # Tree Age calculation (1 year = 360s)
+        now_ts = datetime.datetime.now().timestamp()
+        age_years = max(1, int((now_ts - plot.plant.planted_at) // 360) + 1) if plot.plant.planted_at > 0 else 1
+        age_str = f"{age_years}y"
+        style_short = plot.plant.style.value.split()[0]
+
         if plot.plant.growth_stage == GrowthStage.MATURE:
-            line1 = f"{plant_name} — {stage_name} (Ready to Prune!)"
+            line1 = f"{plant_name} — {stage_name} [{style_short}, {age_str}] (Prune!)"
             art_color = curses.color_pair(1) | curses.A_BOLD
         else:
-            line1 = f"{plant_name} — {stage_name}"
+            line1 = f"{plant_name} — {stage_name} [{style_short}, {age_str}]"
             art_color = curses.color_pair(badge_color)
+
 
         if plot.plant.health_state == HealthState.HEALTHY:
             line2 = f"Health: {badge_text}  |  Water: OK"
@@ -335,13 +342,19 @@ def draw_help_modal(stdscr: curses.window, screen_h: int, screen_w: int) -> None
         "  h / l (←/→)  Switch active pot on the Tokonoma shelf",
         "  w            Water active bonsai tree (resets thirst)",
         "  f            Apply organic fertilizer (+50% growth speed)",
+        "  c            Shape branch with Copper Wire (cycle style)",
         "  x            Prune mature tree (+Zen Coins) / clear dead",
         "  p            Plant a sapling into empty pot",
         "  s            Visit Nursery & Zen Supply Shop",
         "  i            Inspect saplings & supplies inventory",
         "  ?            Open / close this guide",
         "",
+        "AGE & BONSAI STYLING",
+        "  - Tree Age: Older trees yield higher coin rewards (up to +100%).",
+        "  - Styles: Wire trees ('c') into Formal, Informal, or Cascade.",
+        "",
         "SEASONS & DYNAMIC WEATHER",
+
         "  - 🌸 Spring : Sakura blooms faster (+35% growth)",
         "  - ☀️ Summer : Juniper flourishes (+20% growth)",
         "  - 🍁 Autumn : Japanese Maple gives +35% Zen Coins",

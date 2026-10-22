@@ -13,7 +13,7 @@ from vimgarden.config import (
     WILT_GRACE_BUFFER_SECONDS,
 )
 from vimgarden.data.plants_data import PLANTS
-from vimgarden.enums import GrowthStage, HealthState, Season, Weather
+from vimgarden.enums import BonsaiStyle, GrowthStage, HealthState, Season, Weather
 from vimgarden.models import GameState, Plant, PlantType, Plot
 
 SEASONS_CYCLE = [Season.SPRING, Season.SUMMER, Season.AUTUMN, Season.WINTER]
@@ -194,11 +194,12 @@ def prune_bonsai(
     plot: Plot,
     season: Optional[Season] = None,
     decorations: Optional[list[str]] = None,
+    current_time: Optional[float] = None,
 ) -> Optional[tuple[str, int]]:
     """Prune mature bonsai tree: yields Zen coins without destroying tree,
 
     rolling growth back to ADULT stage so it can grow and bloom again.
-    Applies seasonal bonuses (Maple in Autumn) and decor buffs (Toro Lantern).
+    Applies seasonal bonuses, decor buffs, style refinement, and tree age multipliers.
     """
     if not plot.plant or plot.plant.growth_stage != GrowthStage.MATURE:
         return None
@@ -216,10 +217,23 @@ def prune_bonsai(
     if decorations and "toro_lantern" in decorations:
         sell_price = int(sell_price * 1.20)
 
+    # Bonsai training style bonus
+    if plot.plant.style == BonsaiStyle.KENGAI:
+        sell_price = int(sell_price * 1.25)
+    elif plot.plant.style == BonsaiStyle.CHOKKAN:
+        sell_price = int(sell_price * 1.15)
+
+    # Tree Age multiplier (older trees are more valuable)
+    if current_time and plot.plant.planted_at > 0.0:
+        years = max(1, int((current_time - plot.plant.planted_at) // 360) + 1)
+        age_multiplier = 1.0 + min(1.0, (years - 1) * 0.10)
+        sell_price = int(sell_price * age_multiplier)
+
     if plant_type:
         plot.plant.effective_growth_seconds = 0.70 * plant_type.growth_duration
         plot.plant.growth_stage = GrowthStage.ADULT
     return type_id, sell_price
+
 
 
 def fertilize_plot(plot: Plot, duration: float = FERTILIZER_BOOST_SECONDS) -> bool:

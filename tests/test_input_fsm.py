@@ -89,6 +89,10 @@ class TestInputFSM(unittest.TestCase):
         act = self.fsm.handle_key(ord("f"), context)
         self.assertEqual(act.type, "FERTILIZE")
 
+        # Press 'c' -> WIRE_STYLE
+        act_c = self.fsm.handle_key(ord("c"), context)
+        self.assertEqual(act_c.type, "WIRE_STYLE")
+
         # Press '1' .. '3' -> SELECT_POT
         act1 = self.fsm.handle_key(ord("1"), context)
         self.assertEqual(act1.type, "SELECT_POT")
