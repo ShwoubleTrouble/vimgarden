@@ -1,12 +1,30 @@
 # vimgarden
 
 [![Release](https://img.shields.io/github/v/tag/ShwoubleTrouble/vimgarden?label=release&color=007ec6)](https://github.com/ShwoubleTrouble/vimgarden/releases)
+[![PyPI](https://img.shields.io/pypi/v/vimgarden.svg?color=007ec6)](https://pypi.org/project/vimgarden/)
 [![Python](https://img.shields.io/badge/python-3.10+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
+[![CI](https://github.com/ShwoubleTrouble/vimgarden/actions/workflows/ci.yml/badge.svg)](https://github.com/ShwoubleTrouble/vimgarden/actions/workflows/ci.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-22%20passed-brightgreen.svg)]()
 [![Dependencies](https://img.shields.io/badge/dependencies-0%20(pure%20stdlib)-success.svg)]()
 
 > Cultivate ancient bonsai trees in your terminal. Modal Vim controls, real-time seasons, organic ASCII art, and zero external dependencies.
+
+![vimgarden demo](assets/demo.gif)
+
+## Comparison with cbonsai
+
+While [cbonsai](https://gitlab.com/jallbrit/cbonsai) is a fantastic procedural screensaver that generates a tree in ~2 seconds, **vimgarden** is a persistent Zen simulation and bonsai caretaking game:
+
+| Feature | cbonsai | vimgarden |
+| :--- | :--- | :--- |
+| **Category** | Static screensaver / generator | Persistent Zen garden simulation game |
+| **Lifecycle** | Generates in ~2s, vanishes on exit | Real-time growth, tree aging (minutes to years), offline catch-up |
+| **Care & Mechanics** | Passive display | Water, fertilize, prune, wire-shape, shop economy |
+| **Multi-Tree** | 1 tree per invocation | Tokonoma shelf holding 3–5 living bonsai pots |
+| **Bonsai Styling** | Random branching | Manual branch training (*Chokkan*, *Moyogi*, *Kengai*) with Copper Wire |
+| **Controls** | CLI flags | Full Vim modal navigation (`h`/`l`, `w`, `x`, `:wq`) |
+| **Persistence** | None | Atomic JSON saves with automatic backup and crash recovery |
+| **Dependencies** | C (ncurses) | Pure Python standard library (`curses`) |
 
 ## Features
 
@@ -27,6 +45,19 @@
 - Terminal window of at least 80x24 characters
 
 ## Installation
+
+### Via pipx (Recommended)
+
+```bash
+pipx install vimgarden
+```
+
+Or with `pip`:
+```bash
+pip install --user vimgarden
+```
+
+### From Source
 
 ```bash
 git clone https://github.com/ShwoubleTrouble/vimgarden.git
