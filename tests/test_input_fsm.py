@@ -83,6 +83,13 @@ class TestInputFSM(unittest.TestCase):
         self.assertEqual(act.type, "QUIT")
         self.assertTrue(act.payload)  # forced
 
+        # Command :wq!
+        self.fsm.handle_key(ord(":"), context)
+        for ch in "wq!":
+            self.fsm.handle_key(ord(ch), context)
+        act_wq = self.fsm.handle_key(10, context)
+        self.assertEqual(act_wq.type, "SAVE_AND_QUIT")
+
     def test_fertilize_and_pot_select_keys(self):
         context = {}
         # Press 'f' -> FERTILIZE

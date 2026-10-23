@@ -37,15 +37,16 @@ def update_weather_and_seasons(state: GameState, delta: float, current_time: flo
     """Cycle seasons and weather over time; rain auto-waters all living bonsai."""
     state.season_timer += delta
     if state.season_timer >= SEASON_DURATION:
+        cycles = int(state.season_timer // SEASON_DURATION)
         curr_idx = SEASONS_CYCLE.index(state.season) if state.season in SEASONS_CYCLE else 0
-        state.season = SEASONS_CYCLE[(curr_idx + 1) % len(SEASONS_CYCLE)]
-        state.season_timer = 0.0
+        state.season = SEASONS_CYCLE[(curr_idx + cycles) % len(SEASONS_CYCLE)]
+        state.season_timer %= SEASON_DURATION
 
     state.weather_timer += delta
     if state.weather_timer >= WEATHER_DURATION:
         pool = WEATHER_POOLS.get(state.season, [Weather.SUNNY])
         state.weather = random.choice(pool)
-        state.weather_timer = 0.0
+        state.weather_timer %= WEATHER_DURATION
 
     if state.weather == Weather.RAINY:
         for row in state.grid:
@@ -96,13 +97,17 @@ def update_plant(
 
     # Fertilizer boost
     dt = max(0.0, t_to - t_from)
+    extra_fert_growth = 0.0
     if plant.fertilized_remaining_seconds > 0.0 and dt > 0.0:
         boosted_time = min(dt, plant.fertilized_remaining_seconds)
         plant.fertilized_remaining_seconds = max(0.0, plant.fertilized_remaining_seconds - dt)
-        speed_mult += (boosted_time / dt) * (FERTILIZER_SPEED_MULT - 1.0)
+        fert_healthy = min(healthy_time, boosted_time)
+        fert_thirsty = min(thirsty_time, max(0.0, boosted_time - healthy_time))
+        extra_fert_growth = (fert_healthy * 1.0 + fert_thirsty * 0.25) * (FERTILIZER_SPEED_MULT - 1.0)
 
     # Healthy grows at 1.0x, thirsty at 0.25x, wilting/dead at 0.0x
-    gained_growth = (healthy_time * 1.0 + thirsty_time * 0.25) * speed_mult
+    base_growth = (healthy_time * 1.0 + thirsty_time * 0.25) + extra_fert_growth
+    gained_growth = base_growth * speed_mult
     plant.effective_growth_seconds = min(
         plant_type.growth_duration,
         plant.effective_growth_seconds + gained_growth,

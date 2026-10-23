@@ -3,7 +3,7 @@ from pathlib import Path
 import subprocess
 from typing import Optional
 
-__version__ = "0.3.2"
+__version__ = "0.3.3"
 _CACHED_VERSION: Optional[str] = None
 
 

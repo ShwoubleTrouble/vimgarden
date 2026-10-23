@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from vimgarden.models import GameState, Plant, Plot
-from vimgarden.storage import dict_to_state, load_game, save_game, state_to_dict
+from vimgarden.storage import dict_to_state, load_game, load_raw_save, revert_save, save_game, state_to_dict
 
 
 class TestStorage(unittest.TestCase):
@@ -43,6 +43,20 @@ class TestStorage(unittest.TestCase):
         self.assertEqual(restored.inventory, {"sakura": 2, "pine": 1})
         self.assertIsNotNone(restored.grid[0][0].plant)
         self.assertEqual(restored.grid[0][0].plant.type_id, "sakura")
+
+    def test_dead_plant_serialization_and_catchup_preservation(self):
+        from vimgarden.enums import GrowthStage, HealthState
+        from vimgarden.simulation import update_simulation
+        grid = [[Plot(x=0, y=0, plant=Plant(type_id="juniper", planted_at=100.0, last_watered_at=100.0, health_state=HealthState.DEAD, growth_stage=GrowthStage.MATURE))]]
+        state = GameState(grid=grid, last_update_at=500.0)
+        data = state_to_dict(state)
+        restored = dict_to_state(data)
+        self.assertEqual(restored.grid[0][0].plant.health_state, HealthState.DEAD)
+        self.assertEqual(restored.grid[0][0].plant.growth_stage, GrowthStage.MATURE)
+
+        # Offline catch-up must not resurrect dead plant
+        update_simulation(restored, current_time=2000.0, is_offline_catchup=True)
+        self.assertEqual(restored.grid[0][0].plant.health_state, HealthState.DEAD)
 
     def test_atomic_save_and_backup(self):
         with patch("vimgarden.storage.SAVE_DIR", self.test_dir), \
@@ -112,6 +126,28 @@ class TestStorage(unittest.TestCase):
         self.assertEqual(state.grid[0][0].plant.type_id, "juniper")
         # Should have at least 3 pots on the Tokonoma shelf
         self.assertGreaterEqual(len(state.grid[0]), 3)
+
+    def test_load_raw_save_and_revert_save(self):
+        with patch("vimgarden.storage.SAVE_DIR", self.test_dir), \
+             patch("vimgarden.storage.SAVE_FILE", self.save_file):
+
+            # Non-existent file
+            self.assertIsNone(load_raw_save())
+
+            # Revert with None when file doesn't exist -> success, file remains absent
+            self.assertTrue(revert_save(None))
+            self.assertFalse(self.save_file.exists())
+
+            # Write initial save data
+            initial_data = {"player": {"money": 50}}
+            self.assertTrue(revert_save(initial_data))
+            self.assertTrue(self.save_file.exists())
+            loaded = load_raw_save()
+            self.assertEqual(loaded["player"]["money"], 50)
+
+            # Revert with None when file exists -> deletes file
+            self.assertTrue(revert_save(None))
+            self.assertFalse(self.save_file.exists())
 
 
 if __name__ == "__main__":

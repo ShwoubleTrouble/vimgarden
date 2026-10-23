@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 from vimgarden.config import BACKUP_SAVE_FILE, DEFAULT_UNLOCKED_POTS, SAVE_DIR, SAVE_FILE
 from vimgarden.data.plants_data import PLANTS
-from vimgarden.enums import BonsaiStyle, Season, Weather
+from vimgarden.enums import BonsaiStyle, GrowthStage, HealthState, Season, Weather
 from vimgarden.models import GameState, Plant, Plot
 from vimgarden.simulation import update_simulation
 
@@ -65,6 +65,8 @@ def state_to_dict(state: GameState) -> dict[str, Any]:
                     "effective_growth_seconds": plot.plant.effective_growth_seconds,
                     "fertilized_remaining_seconds": plot.plant.fertilized_remaining_seconds,
                     "style": plot.plant.style.value,
+                    "health_state": plot.plant.health_state.value,
+                    "growth_stage": plot.plant.growth_stage.value,
                 }
             plots_data.append(p_data)
 
@@ -146,6 +148,18 @@ def dict_to_state(data: dict[str, Any]) -> GameState:
             except (ValueError, KeyError):
                 style = BonsaiStyle.MOYOGI
 
+            health_raw = p_dict.get("health_state")
+            try:
+                health_state = HealthState(health_raw) if health_raw is not None else HealthState.HEALTHY
+            except (ValueError, KeyError):
+                health_state = HealthState.HEALTHY
+
+            growth_raw = p_dict.get("growth_stage")
+            try:
+                growth_stage = GrowthStage(growth_raw) if growth_raw is not None else GrowthStage.SEED
+            except (ValueError, KeyError):
+                growth_stage = GrowthStage.SEED
+
             plant_obj = Plant(
                 type_id=raw_type,
                 planted_at=p_dict["planted_at"],
@@ -153,6 +167,8 @@ def dict_to_state(data: dict[str, Any]) -> GameState:
                 effective_growth_seconds=p_dict.get("effective_growth_seconds", 0.0),
                 fertilized_remaining_seconds=p_dict.get("fertilized_remaining_seconds", 0.0),
                 style=style,
+                health_state=health_state,
+                growth_stage=growth_stage,
             )
         plot_map[(x, y)] = Plot(
             x=x,
@@ -227,6 +243,49 @@ def save_game(state: GameState) -> bool:
                 tmp_file.unlink()
             except OSError:
                 pass
+
+
+def load_raw_save() -> Optional[dict[str, Any]]:
+    """Load raw JSON dictionary from SAVE_FILE if it exists and is valid."""
+    if SAVE_FILE.exists():
+        try:
+            with open(SAVE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as exc:
+            logger.warning("Could not load raw save file: %s", exc)
+            return None
+    return None
+
+
+def revert_save(snapshot_data: Optional[dict[str, Any]]) -> bool:
+    """Atomically restore SAVE_FILE from snapshot_data, or remove it if initial state was empty."""
+    if snapshot_data is not None:
+        tmp_file = SAVE_DIR / f"save.json.tmp.{os.getpid()}"
+        try:
+            SAVE_DIR.mkdir(parents=True, exist_ok=True)
+            with open(tmp_file, "w", encoding="utf-8") as f:
+                json.dump(snapshot_data, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_file, SAVE_FILE)
+            return True
+        except Exception as exc:
+            logger.error("Failed to atomically revert save: %s", exc)
+            return False
+        finally:
+            if tmp_file.exists():
+                try:
+                    tmp_file.unlink()
+                except OSError:
+                    pass
+    elif SAVE_FILE.exists():
+        try:
+            SAVE_FILE.unlink()
+            return True
+        except OSError as exc:
+            logger.error("Failed to remove save file on revert: %s", exc)
+            return False
+    return True
 
 
 def load_game() -> GameState:

@@ -8,7 +8,7 @@ from types import FrameType
 from typing import Optional
 
 from vimgarden.config import AUTO_SAVE_INTERVAL, MAX_POTS, SAVE_DIR, SAVE_FILE, TICK_TIMEOUT_MS
-from vimgarden.data.plants_data import PLANTS, SHOP_ITEMS
+from vimgarden.data.plants_data import PLANTS, SHOP_ITEMS, get_shop_items
 from vimgarden.enums import BonsaiStyle, GameMode, GrowthStage, HealthState
 from vimgarden.input_fsm import Action, InputFSM
 from vimgarden.models import GameState, Plant, Plot
@@ -19,7 +19,7 @@ from vimgarden.simulation import (
     update_simulation,
     water_plot,
 )
-from vimgarden.storage import load_game, save_game, state_to_dict
+from vimgarden.storage import load_game, load_raw_save, revert_save, save_game, state_to_dict
 from vimgarden.ui.renderer import Renderer
 
 _GLOBAL_STATE: Optional[GameState] = None
@@ -30,12 +30,9 @@ _INITIAL_SAVE_DATA: Optional[dict] = None
 def init_save_snapshot(state: GameState) -> None:
     """Store snapshot of save data as it was at session start."""
     global _INITIAL_SAVE_DATA
-    if SAVE_FILE.exists():
-        try:
-            with open(SAVE_FILE, "r", encoding="utf-8") as f:
-                _INITIAL_SAVE_DATA = json.load(f)
-        except Exception:
-            _INITIAL_SAVE_DATA = state_to_dict(state)
+    raw = load_raw_save()
+    if raw is not None:
+        _INITIAL_SAVE_DATA = raw
     else:
         _INITIAL_SAVE_DATA = None
 
@@ -46,29 +43,24 @@ def update_save_snapshot(state: GameState) -> None:
     _INITIAL_SAVE_DATA = state_to_dict(state)
 
 
-def revert_to_last_save() -> None:
+def revert_to_last_save() -> bool:
     """Revert SAVE_FILE to the snapshot from last explicit save (or session start)."""
     global _INITIAL_SAVE_DATA
-    if _INITIAL_SAVE_DATA is not None:
-        try:
-            SAVE_DIR.mkdir(parents=True, exist_ok=True)
-            with open(SAVE_FILE, "w", encoding="utf-8") as f:
-                json.dump(_INITIAL_SAVE_DATA, f, indent=2)
-        except OSError:
-            pass
-    elif SAVE_FILE.exists():
-        try:
-            SAVE_FILE.unlink()
-        except OSError:
-            pass
+    return revert_save(_INITIAL_SAVE_DATA)
+
+
+def reset_globals() -> None:
+    """Reset global module state for testing and clean teardown."""
+    global _GLOBAL_STATE, _HAS_UNSAVED_CHANGES, _INITIAL_SAVE_DATA
+    _GLOBAL_STATE = None
+    _HAS_UNSAVED_CHANGES = False
+    _INITIAL_SAVE_DATA = None
 
 
 def _signal_handler(signum: int, frame: Optional[FrameType]) -> None:
-    """Ensure atomic save on termination signals without clobbering dirty state."""
-    global _GLOBAL_STATE, _HAS_UNSAVED_CHANGES
-    if _HAS_UNSAVED_CHANGES:
-        revert_to_last_save()
-    elif _GLOBAL_STATE is not None:
+    """Ensure atomic save on termination signals."""
+    global _GLOBAL_STATE
+    if _GLOBAL_STATE is not None:
         save_game(_GLOBAL_STATE)
     sys.exit(0)
 
@@ -110,6 +102,8 @@ def handle_fertilize(state: GameState, curr_plot: Optional[Plot]) -> tuple[str, 
         return "No tree in this pot to fertilize.", False
     if curr_plot.plant.health_state == HealthState.DEAD:
         return "Cannot fertilize a dead tree.", False
+    if curr_plot.plant.growth_stage == GrowthStage.MATURE:
+        return "Tree is already fully mature! Prune it ('x') to harvest.", False
     fertilize_plot(curr_plot)
     state.inventory["fertilizer"] -= 1
     if state.inventory["fertilizer"] <= 0:
@@ -206,13 +200,15 @@ def handle_buy(state: GameState, item_id: str) -> tuple[str, bool]:
         if state.money < price:
             return f"Not enough Zen Coins for {name}!", False
         if itype == "upgrade" and item_id == "pot_slot":
-            if len(state.grid[0]) >= MAX_POTS:
+            grid_w = len(state.grid[0]) if (state.grid and state.grid[0]) else 0
+            if grid_w >= MAX_POTS:
                 return f"Tokonoma shelf is at max capacity ({MAX_POTS} pots)!", False
             state.money -= price
-            new_x = len(state.grid[0])
+            new_x = grid_w
+            if not state.grid:
+                state.grid = [[]]
             state.grid[0].append(Plot(x=new_x, y=0))
-            grid_w = len(state.grid[0])
-            return f"Expanded Tokonoma shelf! Now has {grid_w} pots.", True
+            return f"Expanded Tokonoma shelf! Now has {len(state.grid[0])} pots.", True
         if itype == "decor":
             if item_id in state.decorations:
                 return f"You already placed a {name} in your garden!", False
@@ -315,8 +311,10 @@ def dispatch_action(
         return msg, has_unsaved_changes, not should_quit, should_save
 
     elif action.type == "SAVE_AND_QUIT":
-        handle_save(state)
-        return "", False, False, True
+        msg, success = handle_save(state)
+        if success:
+            return msg, False, False, False
+        return msg, has_unsaved_changes, True, True
 
     elif action.type == "UNKNOWN_CMD":
         return f"Not an editor command: :{action.payload}", has_unsaved_changes, True, True
@@ -340,6 +338,8 @@ def main(stdscr: curses.window) -> None:
     stdscr.timeout(TICK_TIMEOUT_MS)
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
+    if hasattr(signal, "SIGHUP"):
+        signal.signal(signal.SIGHUP, _signal_handler)
 
     running = True
     should_save_on_exit = True
@@ -353,11 +353,12 @@ def main(stdscr: curses.window) -> None:
         # 1. Update plant simulation
         update_simulation(state, current_time=curr_time)
 
-        # 2. Check periodic auto-save (only if clean)
-        if curr_time - last_auto_save >= AUTO_SAVE_INTERVAL:
-            if not has_unsaved_changes:
-                save_game(state)
+        # 2. Check periodic auto-save
+        if (curr_time - last_auto_save >= AUTO_SAVE_INTERVAL) or (curr_time < last_auto_save):
+            if save_game(state):
                 update_save_snapshot(state)
+                has_unsaved_changes = False
+                _HAS_UNSAVED_CHANGES = False
             last_auto_save = curr_time
 
         # 3. Handle user input
@@ -370,7 +371,7 @@ def main(stdscr: curses.window) -> None:
             available_seeds = [s for s, count in state.inventory.items() if count > 0 and s in PLANTS]
             context = {
                 "available_seeds": available_seeds,
-                "shop_items": list(PLANTS.keys()) + list(SHOP_ITEMS.keys()),
+                "shop_items": get_shop_items(),
                 "inventory_items": list(state.inventory.items()),
             }
 
@@ -401,10 +402,18 @@ def main(stdscr: curses.window) -> None:
 
 def cli() -> None:
     """Console script entry point."""
-    if len(sys.argv) > 1 and sys.argv[1] in ("--version", "-v"):
-        from vimgarden import get_version_string
-        print(f"vimgarden {get_version_string()}")
-        sys.exit(0)
+    if len(sys.argv) > 1:
+        if sys.argv[1] in ("--version", "-v"):
+            from vimgarden import get_version_string
+            print(f"vimgarden {get_version_string()}")
+            sys.exit(0)
+        elif sys.argv[1] in ("--help", "-h"):
+            print("Usage: vimgarden [OPTIONS]")
+            print("\nTerminal-based Zen Bonsai simulation game with Vim-like controls.")
+            print("\nOptions:")
+            print("  -v, --version  Show version and exit")
+            print("  -h, --help     Show this message and exit")
+            sys.exit(0)
     curses.wrapper(main)
 
 

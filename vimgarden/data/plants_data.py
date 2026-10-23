@@ -57,28 +57,33 @@ SHOP_ITEMS: dict[str, dict[str, str | int]] = {
         "name": "Copper Bonsai Wire",
         "price": 25,
         "type": "tool",
-        "desc": "Shape bonsai style ('c' to train)",
+        "desc": "Shape style ('c' to cycle)",
     },
     "pot_slot": {
         "id": "pot_slot",
         "name": "Tokonoma Pot Slot",
         "price": 75,
         "type": "upgrade",
-        "desc": "Expands shelf capacity by +1 pot",
+        "desc": "+1 shelf pot capacity",
     },
     "toro_lantern": {
         "id": "toro_lantern",
         "name": "Toro Stone Lantern",
         "price": 120,
         "type": "decor",
-        "desc": "Traditional granite garden lantern (+20% Zen Coin bonus)",
+        "desc": "+20% Zen Coins bonus",
     },
     "furin_chime": {
         "id": "furin_chime",
         "name": "Furin Wind Chime",
         "price": 60,
         "type": "decor",
-        "desc": "Soothes the bonsai with peaceful chime (+15% growth speed)",
+        "desc": "+15% growth speed",
     },
 }
+
+
+def get_shop_items() -> list[str]:
+    """Return unified ordered list of all purchasable nursery items and saplings."""
+    return list(PLANTS.keys()) + list(SHOP_ITEMS.keys())
 

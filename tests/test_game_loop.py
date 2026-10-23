@@ -20,13 +20,16 @@ from vimgarden.__main__ import (
     handle_water,
     handle_wire_style,
     init_save_snapshot,
+    reset_globals,
     revert_to_last_save,
+    _signal_handler,
 )
 from vimgarden.config import MAX_POTS
+from vimgarden.data.plants_data import PLANTS, SHOP_ITEMS, get_shop_items
 from vimgarden.enums import BonsaiStyle, GameMode, GrowthStage, HealthState
 from vimgarden.input_fsm import Action, InputFSM
 from vimgarden.models import GameState, Plant, Plot
-from vimgarden.storage import state_to_dict
+from vimgarden.storage import revert_save, state_to_dict
 
 
 class TestGameLoopHandlers(unittest.TestCase):
@@ -36,6 +39,7 @@ class TestGameLoopHandlers(unittest.TestCase):
 
     def tearDown(self):
         shutil.rmtree(self.test_dir, ignore_errors=True)
+        reset_globals()
 
     def test_handle_move(self):
         state = GameState(cursor_x=1, cursor_y=0, grid=[[Plot(x=0, y=0), Plot(x=1, y=0), Plot(x=2, y=0)]])
@@ -95,6 +99,14 @@ class TestGameLoopHandlers(unittest.TestCase):
         msg, changed = handle_fertilize(state, plot)
         self.assertFalse(changed)
         self.assertIn("No fertilizer", msg)
+
+        # Mature tree cannot be fertilized
+        state.inventory["fertilizer"] = 1
+        mature_plot = Plot(x=0, y=0, plant=Plant(type_id="juniper", planted_at=50.0, last_watered_at=50.0, growth_stage=GrowthStage.MATURE))
+        msg, changed = handle_fertilize(state, mature_plot)
+        self.assertFalse(changed)
+        self.assertIn("mature", msg)
+        self.assertEqual(state.inventory["fertilizer"], 1)
 
     def test_handle_wire_style(self):
         plot = Plot(x=0, y=0, plant=Plant(type_id="juniper", planted_at=50.0, last_watered_at=50.0, style=BonsaiStyle.MOYOGI))
@@ -252,6 +264,77 @@ class TestGameLoopHandlers(unittest.TestCase):
             with open(self.save_file, "r") as f:
                 saved = json.load(f)
             self.assertEqual(saved["player"]["money"], 100)
+
+    def test_get_shop_items_synchronization(self):
+        items = get_shop_items()
+        self.assertEqual(items, list(PLANTS.keys()) + list(SHOP_ITEMS.keys()))
+        state = GameState(money=1000, grid=[[Plot(x=0, y=0)]])
+        for item_id in items:
+            msg, success = handle_buy(state, item_id)
+            self.assertTrue(success, f"Failed to buy item {item_id}: {msg}")
+
+    def test_save_and_quit_success_and_failure(self):
+        state = GameState(money=100)
+        fsm = InputFSM()
+        action = Action(type="SAVE_AND_QUIT")
+
+        # Success case: saves cleanly and exits, save_flag is False (already saved)
+        with patch("vimgarden.__main__.handle_save", return_value=("Saved", True)):
+            msg, dirty, running, save_flag = dispatch_action(
+                action, state, fsm, curr_time=100.0, has_unsaved_changes=True, available_seeds=[]
+            )
+            self.assertEqual(msg, "Saved")
+            self.assertFalse(dirty)
+            self.assertFalse(running)
+            self.assertFalse(save_flag)
+
+        # Failure case: does not quit, retains unsaved changes
+        with patch("vimgarden.__main__.handle_save", return_value=("Failed to save!", False)):
+            msg, dirty, running, save_flag = dispatch_action(
+                action, state, fsm, curr_time=100.0, has_unsaved_changes=True, available_seeds=[]
+            )
+            self.assertEqual(msg, "Failed to save!")
+            self.assertTrue(dirty)
+            self.assertTrue(running)
+
+    def test_signal_handler_saves_state(self):
+        saved_state = None
+
+        def fake_save(st):
+            nonlocal saved_state
+            saved_state = st
+            return True
+
+        with patch("vimgarden.__main__.save_game", side_effect=fake_save), \
+             patch("sys.exit") as mock_exit:
+            test_state = GameState(money=777)
+            import vimgarden.__main__ as main_mod
+            main_mod._GLOBAL_STATE = test_state
+            _signal_handler(15, None)
+            mock_exit.assert_called_once_with(0)
+            self.assertEqual(saved_state, test_state)
+
+
+    def test_cli_flags(self):
+        from vimgarden.__main__ import cli
+        import io
+        import sys
+
+        # Test --help
+        with patch.object(sys, "argv", ["vimgarden", "--help"]), \
+             patch("sys.stdout", new=io.StringIO()) as fake_out:
+            with self.assertRaises(SystemExit) as cm:
+                cli()
+            self.assertEqual(cm.exception.code, 0)
+            self.assertIn("Usage: vimgarden", fake_out.getvalue())
+
+        # Test --version
+        with patch.object(sys, "argv", ["vimgarden", "--version"]), \
+             patch("sys.stdout", new=io.StringIO()) as fake_out:
+            with self.assertRaises(SystemExit) as cm:
+                cli()
+            self.assertEqual(cm.exception.code, 0)
+            self.assertIn("vimgarden", fake_out.getvalue())
 
 
 if __name__ == "__main__":

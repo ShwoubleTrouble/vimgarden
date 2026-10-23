@@ -119,7 +119,7 @@ class InputFSM:
         items = context.get("shop_items", [])
         max_idx = max(0, len(items) - 1)
 
-        if key in (27, ord("q")):
+        if key in (27, ord("q"), ord("s")):
             self.mode = GameMode.NORMAL
             return Action("NONE")
         elif key in (ord("k"), 259):
@@ -139,7 +139,7 @@ class InputFSM:
         items = context.get("inventory_items", [])
         max_idx = max(0, len(items) - 1)
 
-        if key in (27, ord("q"), 10, 13, ord(" ")):
+        if key in (27, ord("q"), 10, 13, ord(" "), ord("i")):
             self.mode = GameMode.NORMAL
             return Action("NONE")
         elif key in (ord("k"), 259):
@@ -172,13 +172,13 @@ class InputFSM:
         return None
 
     def _parse_command(self, cmd: str) -> Action:
-        if cmd == "w":
+        if cmd in ("w", "w!"):
             return Action("SAVE")
         elif cmd in ("q", "quit"):
             return Action("QUIT", False)
         elif cmd in ("q!", "quit!"):
             return Action("QUIT", True)
-        elif cmd in ("wq", "x"):
+        elif cmd in ("wq", "wq!", "x", "x!"):
             return Action("SAVE_AND_QUIT")
         elif cmd in ("h", "help"):
             self.mode = GameMode.HELP

@@ -3,7 +3,7 @@ import curses
 from typing import Optional
 
 from vimgarden.config import MIN_COLS, MIN_LINES
-from vimgarden.data.plants_data import PLANTS, SHOP_ITEMS
+from vimgarden.data.plants_data import PLANTS, get_shop_items
 from vimgarden.enums import GameMode
 from vimgarden.input_fsm import InputFSM
 from vimgarden.models import GameState, Plot
@@ -89,11 +89,11 @@ class Renderer:
             available_seeds = [s for s, count in state.inventory.items() if count > 0 and s in PLANTS]
             draw_seed_select_modal(self.stdscr, available_seeds, fsm.selected_index, h, w)
         elif fsm.mode == GameMode.SHOP:
-            shop_items = list(PLANTS.keys()) + list(SHOP_ITEMS.keys())
+            shop_items = get_shop_items()
             draw_shop_modal(self.stdscr, shop_items, state.money, fsm.selected_index, h, w)
 
         elif fsm.mode == GameMode.INVENTORY:
-            draw_inventory_modal(self.stdscr, state.inventory, h, w)
+            draw_inventory_modal(self.stdscr, state.inventory, fsm.selected_index, h, w)
         elif fsm.mode == GameMode.HELP:
             draw_help_modal(self.stdscr, h, w)
 

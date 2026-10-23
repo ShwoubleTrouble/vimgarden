@@ -1,6 +1,7 @@
 """UI components for single central Bonsai pot, modals, and status bars."""
 import curses
 import datetime
+import unicodedata
 from typing import Optional
 
 from vimgarden import get_version_string
@@ -39,6 +40,21 @@ WEATHER_SYMBOLS: dict[Weather, str] = {
 }
 
 
+def str_cell_width(s: str) -> int:
+    """Calculate visible monospace column width accounting for wide emoji characters."""
+    w = 0
+    for ch in s:
+        cat = unicodedata.category(ch)
+        if cat in ("Mn", "Me"):
+            continue
+        eaw = unicodedata.east_asian_width(ch)
+        if eaw in ("W", "F") or cat in ("So", "Sk") or ord(ch) >= 0x1F300:
+            w += 2
+        else:
+            w += 1
+    return w
+
+
 def draw_header(stdscr: curses.window, state: GameState, width: int) -> None:
     """Draw top status bar with season, weather, coins, and active pot."""
     season_str = SEASON_SYMBOLS.get(state.season, state.season.value)
@@ -48,9 +64,13 @@ def draw_header(stdscr: curses.window, state: GameState, width: int) -> None:
     left_str = f" ${state.money} Zen Coins | {season_str} | {weather_str}"
     right_str = f"Pot [{state.cursor_x + 1}/{pots_count}] | vimgarden {get_version_string()} "
 
-
-    pad = max(0, width - len(left_str) - len(right_str))
-    full_str = (left_str + (" " * pad) + right_str)[:width]
+    safe_w = max(1, width - 1)
+    left_w = str_cell_width(left_str)
+    right_w = str_cell_width(right_str)
+    pad = max(0, safe_w - left_w - right_w)
+    full_str = left_str + (" " * pad) + right_str
+    while full_str and str_cell_width(full_str) > safe_w:
+        full_str = full_str[:-1]
 
     try:
         stdscr.attron(curses.A_REVERSE)
@@ -71,9 +91,9 @@ def draw_shelf_bar(stdscr: curses.window, state: GameState, y: int, width: int) 
             pt = PLANTS.get(plot.plant.type_id)
             name = pt.name.split()[0] if pt else plot.plant.type_id.capitalize()
             stage = STAGE_NAMES.get(plot.plant.growth_stage, "")
-            label = f"{name} ({stage})"
+            label = f"{name} ({stage})" if is_active else name
         else:
-            label = "Empty Pot"
+            label = "Empty"
 
         if is_active:
             items.append(f">[{idx + 1}: {label}]<")
@@ -81,27 +101,39 @@ def draw_shelf_bar(stdscr: curses.window, state: GameState, y: int, width: int) 
             items.append(f"[{idx + 1}: {label}]")
 
     shelf_content = "  ".join(items)
-    shelf_start_x = max(0, (width - len(shelf_content)) // 2)
+    shelf_w = len(shelf_content)
+    safe_w = max(1, width - 1)
 
     try:
-        stdscr.addstr(y, 0, "─" * width, curses.color_pair(4))
-        for idx, plot in enumerate(row):
-            is_active = idx == state.cursor_x
-            if plot.plant:
-                pt = PLANTS.get(plot.plant.type_id)
-                name = pt.name.split()[0] if pt else plot.plant.type_id.capitalize()
-                stage = STAGE_NAMES.get(plot.plant.growth_stage, "")
-                label = f"{name} ({stage})"
-            else:
-                label = "Empty Pot"
+        stdscr.addstr(y, 0, "─" * safe_w, curses.color_pair(4))
 
-            txt = f">[{idx + 1}: {label}]<" if is_active else f"[{idx + 1}: {label}]"
-            # find start position
-            pos = shelf_content.find(txt)
-            if pos != -1 and (shelf_start_x + pos + len(txt)) < width:
+        if shelf_w <= safe_w:
+            shelf_start_x = max(0, (safe_w - shelf_w) // 2)
+            cur_x = shelf_start_x
+            for idx, item_str in enumerate(items):
+                is_active = idx == state.cursor_x
                 attr = curses.color_pair(1) | curses.A_BOLD if is_active else curses.color_pair(6)
-                stdscr.addstr(y, shelf_start_x + pos, txt, attr)
-        stdscr.addstr(y + 1, 0, "─" * width, curses.color_pair(4))
+                if cur_x + len(item_str) <= safe_w:
+                    stdscr.addstr(y, cur_x, item_str, attr)
+                cur_x += len(item_str) + 2
+        else:
+            item_positions = []
+            cx = 0
+            for item_str in items:
+                item_positions.append(cx)
+                cx += len(item_str) + 2
+
+            act_x = item_positions[state.cursor_x] + len(items[state.cursor_x]) // 2
+            offset = max(0, min(act_x - safe_w // 2, max(0, shelf_w - safe_w)))
+
+            for idx, item_str in enumerate(items):
+                is_active = idx == state.cursor_x
+                attr = curses.color_pair(1) | curses.A_BOLD if is_active else curses.color_pair(6)
+                ix = item_positions[idx] - offset
+                if 0 <= ix and ix + len(item_str) <= safe_w:
+                    stdscr.addstr(y, ix, item_str, attr)
+
+        stdscr.addstr(y + 1, 0, "─" * safe_w, curses.color_pair(4))
     except curses.error:
         pass
 
@@ -118,7 +150,8 @@ def draw_footer(
 ) -> None:
     """Draw bottom status bar and hotkey hints."""
     try:
-        stdscr.addstr(y - 1, 0, "─" * width, curses.color_pair(4))
+        safe_w = max(1, width - 1)
+        stdscr.addstr(y - 1, 0, "─" * safe_w, curses.color_pair(4))
 
         if cmd_buffer is not None:
             left_str = f" :{cmd_buffer}"
@@ -128,8 +161,8 @@ def draw_footer(
             left_str = f" [{mode_name}]"
 
         hint_str = f"{hint} "
-        pad = max(0, width - len(left_str) - len(hint_str))
-        full_line = (left_str + (" " * pad) + hint_str)[:width]
+        pad = max(0, safe_w - len(left_str) - len(hint_str))
+        full_line = (left_str + (" " * pad) + hint_str)[:safe_w]
 
         stdscr.attron(curses.A_REVERSE)
         stdscr.addstr(y, 0, full_line)
@@ -196,11 +229,13 @@ def draw_bonsai_pot(
             stdscr.addstr(y + 1 + i, x + 30, "║", border_attr)
         stdscr.addstr(y + 14, x, bot_border, border_attr)
 
-        # Status lines below pot
-        l1_centered = f"{line1:^31}"
-        l2_centered = f"{line2:^31}"
-        stdscr.addstr(y + 15, x, l1_centered, curses.A_BOLD)
-        stdscr.addstr(y + 16, x, l2_centered, curses.color_pair(art_color & 0xFF))
+        # Status lines centered below pot
+        center_x = x + 15
+        l1_x = max(0, center_x - len(line1) // 2)
+        l2_x = max(0, center_x - len(line2) // 2)
+        l2_color = curses.color_pair(badge_color) if plot.plant else curses.color_pair(6)
+        stdscr.addstr(y + 15, l1_x, line1, curses.A_BOLD)
+        stdscr.addstr(y + 16, l2_x, line2, l2_color)
     except curses.error:
         pass
 
@@ -231,31 +266,37 @@ def draw_seed_select_modal(
     screen_w: int,
 ) -> None:
     """Draw sapling selection modal."""
-    h = max(7, len(seeds) + 4)
-    w = 42
-    y = max(2, (screen_h - h) // 2)
-    x = max(2, (screen_w - w) // 2)
+    try:
+        h = max(7, len(seeds) + 5)
+        w = 46
+        y = max(2, (screen_h - h) // 2)
+        x = max(2, (screen_w - w) // 2)
 
-    draw_modal_box(stdscr, y, x, h, w, "Select Bonsai to Plant")
+        draw_modal_box(stdscr, y, x, h, w, "Select Bonsai to Plant")
 
-    if not seeds:
-        stdscr.addstr(y + 2, x + 4, "No saplings in inventory!", curses.color_pair(3))
-        stdscr.addstr(y + 4, x + 4, "Press 's' to visit the Nursery", curses.color_pair(6))
-        return
+        if not seeds:
+            stdscr.addstr(y + 2, x + 4, "No saplings in inventory!", curses.color_pair(3))
+            stdscr.addstr(y + 4, x + 4, "Press 's' to visit the Nursery", curses.color_pair(6))
+            stdscr.addstr(y + h - 2, x + 3, "Esc: Back", curses.color_pair(4))
+            return
 
-    for idx, seed_id in enumerate(seeds):
-        plant_type = PLANTS.get(seed_id)
-        name = plant_type.name if plant_type else seed_id.capitalize()
-        grow_m = int((plant_type.growth_duration if plant_type else 60) // 60)
-        grow_s = int((plant_type.growth_duration if plant_type else 60) % 60)
-        time_str = f"{grow_m}m{grow_s}s" if grow_m else f"{grow_s}s"
-        line = f"{name:<18} (Cycle: {time_str:>4})"
+        for idx, seed_id in enumerate(seeds):
+            plant_type = PLANTS.get(seed_id)
+            name = plant_type.name if plant_type else seed_id.capitalize()
+            grow_m = int((plant_type.growth_duration if plant_type else 60) // 60)
+            grow_s = int((plant_type.growth_duration if plant_type else 60) % 60)
+            time_str = f"{grow_m}m{grow_s}s" if grow_m else f"{grow_s}s"
+            line = f"{name:<18} (Cycle: {time_str:>4})"
 
-        is_sel = idx == selected_idx
-        prefix = " > " if is_sel else "   "
-        attr = curses.A_REVERSE if is_sel else curses.A_NORMAL
+            is_sel = idx == selected_idx
+            prefix = " > " if is_sel else "   "
+            attr = curses.A_REVERSE if is_sel else curses.A_NORMAL
 
-        stdscr.addstr(y + 2 + idx, x + 2, (prefix + line)[: w - 4], attr)
+            stdscr.addstr(y + 2 + idx, x + 2, (prefix + line)[: w - 4], attr)
+
+        stdscr.addstr(y + h - 2, x + 3, "Enter:Plant | jk:Select | Esc:Back", curses.color_pair(4))
+    except curses.error:
+        pass
 
 
 def draw_shop_modal(
@@ -267,115 +308,155 @@ def draw_shop_modal(
     screen_w: int,
 ) -> None:
     """Draw bonsai nursery & supplies shop modal."""
-    h = min(screen_h - 4, max(10, len(shop_items) + 6))
-    w = 62
-    y = max(2, (screen_h - h) // 2)
-    x = max(2, (screen_w - w) // 2)
+    try:
+        h = min(screen_h - 4, max(10, len(shop_items) + 6))
+        w = min(screen_w - 4, 78)
+        y = max(2, (screen_h - h) // 2)
+        x = max(2, (screen_w - w) // 2)
 
-    draw_modal_box(stdscr, y, x, h, w, "Bonsai Nursery & Zen Supplies")
+        draw_modal_box(stdscr, y, x, h, w, "Bonsai Nursery & Zen Supplies")
 
-    stdscr.addstr(y + 2, x + 3, f"Zen Balance: ${money}", curses.color_pair(1) | curses.A_BOLD)
-    stdscr.addstr(y + 3, x + 3, "Item/Species          Price   Category   Details", curses.color_pair(6))
+        stdscr.addstr(y + 2, x + 3, f"Zen Balance: ${money}", curses.color_pair(1) | curses.A_BOLD)
+        stdscr.addstr(y + 3, x + 3, "  Item/Species        Price  Category  Details", curses.color_pair(6))
 
-    for idx, item_id in enumerate(shop_items):
-        if idx >= h - 6:
-            break
-        pt = PLANTS.get(item_id)
-        si = SHOP_ITEMS.get(item_id)
-        if pt:
-            line = f"{pt.name:<20}  ${pt.seed_price:<6}  Sapling    Yield: +${pt.sell_price}"
-        elif si:
-            name = str(si.get("name", item_id))
-            price = str(si.get("price", 0))
-            itype = str(si.get("type", "supply")).capitalize()
-            desc = str(si.get("desc", ""))
-            line = f"{name:<20}  ${price:<6}  {itype:<9}  {desc[:16]}"
+        max_visible = max(1, h - 6)
+        if len(shop_items) <= max_visible:
+            start_idx = 0
         else:
-            line = f"{item_id:<20}"
+            start_idx = max(0, min(selected_idx - max_visible // 2, len(shop_items) - max_visible))
 
-        is_sel = idx == selected_idx
-        prefix = "> " if is_sel else "  "
-        attr = curses.A_REVERSE if is_sel else curses.A_NORMAL
+        for row_offset, idx in enumerate(range(start_idx, min(len(shop_items), start_idx + max_visible))):
+            item_id = shop_items[idx]
+            pt = PLANTS.get(item_id)
+            si = SHOP_ITEMS.get(item_id)
+            if pt:
+                line = f"{pt.name:<18}  ${pt.seed_price:<5}  Sapling   Yield: +${pt.sell_price}"
+            elif si:
+                name = str(si.get("name", item_id))
+                price = str(si.get("price", 0))
+                itype = str(si.get("type", "supply")).capitalize()
+                desc = str(si.get("desc", ""))
+                line = f"{name:<18}  ${price:<5}  {itype:<8}  {desc}"
+            else:
+                line = f"{item_id:<18}"
 
-        stdscr.addstr(y + 4 + idx, x + 2, (prefix + line)[: w - 4], attr)
+            is_sel = idx == selected_idx
+            prefix = "> " if is_sel else "  "
+            attr = curses.A_REVERSE if is_sel else curses.A_NORMAL
 
-    stdscr.addstr(y + h - 2, x + 3, "Press 'b' to purchase | jk:Scroll | Esc:Back", curses.color_pair(4))
+            stdscr.addstr(y + 4 + row_offset, x + 2, (prefix + line)[: w - 4], attr)
+
+        stdscr.addstr(y + h - 2, x + 3, "b / Enter: Buy | jk:Scroll | Esc / s:Back", curses.color_pair(4))
+    except curses.error:
+        pass
 
 
 def draw_inventory_modal(
     stdscr: curses.window,
     inventory: dict[str, int],
-    screen_h: int,
-    screen_w: int,
+    selected_idx: int = 0,
+    screen_h: int = 24,
+    screen_w: int = 80,
 ) -> None:
     """Draw inventory modal."""
-    items = list(inventory.items())
-    h = max(8, len(items) + 5)
-    w = 52
-    y = max(2, (screen_h - h) // 2)
-    x = max(2, (screen_w - w) // 2)
+    try:
+        items = list(inventory.items())
+        h = min(screen_h - 4, max(8, len(items) + 6))
+        w = min(screen_w - 4, 56)
+        y = max(2, (screen_h - h) // 2)
+        x = max(2, (screen_w - w) // 2)
 
-    draw_modal_box(stdscr, y, x, h, w, "Bonsai Supplies & Saplings")
+        draw_modal_box(stdscr, y, x, h, w, "Bonsai Supplies & Saplings")
 
-    if not items:
-        stdscr.addstr(y + 2, x + 4, "Your inventory is empty.", curses.color_pair(6))
-        return
+        if not items:
+            stdscr.addstr(y + 2, x + 4, "Your inventory is empty.", curses.color_pair(6))
+            stdscr.addstr(y + h - 2, x + 3, "Esc / q: Back", curses.color_pair(4))
+            return
 
-    stdscr.addstr(y + 2, x + 4, "Item / Species                  Quantity", curses.color_pair(6))
-    for idx, (item_id, count) in enumerate(items):
-        pt = PLANTS.get(item_id)
-        si = SHOP_ITEMS.get(item_id)
-        if pt:
-            name = pt.name
-        elif si:
-            name = str(si.get("name", item_id))
+        stdscr.addstr(y + 2, x + 3, "  Item / Species                  Quantity", curses.color_pair(6))
+
+        max_visible = max(1, h - 5)
+        if len(items) <= max_visible:
+            start_idx = 0
         else:
-            name = item_id.capitalize()
-        line = f"{name:<30} x{count}"
-        stdscr.addstr(y + 3 + idx, x + 4, line[: w - 8], curses.A_NORMAL)
+            start_idx = max(0, min(selected_idx - max_visible // 2, len(items) - max_visible))
+
+        for row_offset, idx in enumerate(range(start_idx, min(len(items), start_idx + max_visible))):
+            item_id, count = items[idx]
+            pt = PLANTS.get(item_id)
+            si = SHOP_ITEMS.get(item_id)
+            if pt:
+                name = pt.name
+            elif si:
+                name = str(si.get("name", item_id))
+            else:
+                name = item_id.capitalize()
+            line = f"{name:<30} x{count}"
+
+            is_sel = idx == selected_idx
+            prefix = "> " if is_sel else "  "
+            attr = curses.A_REVERSE if is_sel else curses.A_NORMAL
+            stdscr.addstr(y + 3 + row_offset, x + 2, (prefix + line)[: w - 4], attr)
+
+        stdscr.addstr(y + h - 2, x + 3, "jk:Scroll | Esc:Back", curses.color_pair(4))
+    except curses.error:
+        pass
 
 
 def draw_help_modal(stdscr: curses.window, screen_h: int, screen_w: int) -> None:
     """Draw help screen overlay."""
-    lines = [
-        "VIM-LIKE BONSAI CONTROLS",
-        "",
-        "  h / l (←/→)  Switch active pot on the Tokonoma shelf",
-        "  w            Water active bonsai tree (resets thirst)",
-        "  f            Apply organic fertilizer (+50% growth speed)",
-        "  c            Shape branch with Copper Wire (cycle style)",
-        "  x            Prune mature tree (+Zen Coins) / clear dead",
-        "  p            Plant a sapling into empty pot",
-        "  s            Visit Nursery & Zen Supply Shop",
-        "  i            Inspect saplings & supplies inventory",
-        "  ?            Open / close this guide",
-        "",
-        "AGE & BONSAI STYLING",
-        "  - Tree Age: Older trees yield higher coin rewards (up to +100%).",
-        "  - Styles: Wire trees ('c') into Formal, Informal, or Cascade.",
-        "",
-        "SEASONS & DYNAMIC WEATHER",
+    try:
+        w = min(screen_w - 4, 76)
+        h = min(screen_h - 2, 19)
+        y = max(1, (screen_h - h) // 2)
+        x = max(2, (screen_w - w) // 2)
 
-        "  - 🌸 Spring : Sakura blooms faster (+35% growth)",
-        "  - ☀️ Summer : Juniper flourishes (+20% growth)",
-        "  - 🍁 Autumn : Japanese Maple gives +35% Zen Coins",
-        "  - ❄️ Winter : Black Pine withstands the cold",
-        "  - 🌧 Rain   : Automatically waters all bonsai trees!",
-        "",
-        "COMMAND MODE (press ':')",
-        "  :w           Save garden state",
-        "  :q           Quit game (:q! to force)",
-        "  :wq / :x     Save and quit",
-        "",
-        "Press Esc or q to return",
-    ]
-    h = len(lines) + 4
-    w = 62
-    y = max(1, (screen_h - h) // 2)
-    x = max(2, (screen_w - w) // 2)
+        draw_modal_box(stdscr, y, x, h, w, "Bonsai Zen Guide")
 
-    draw_modal_box(stdscr, y, x, h, w, "Bonsai Zen Guide")
-    for idx, line in enumerate(lines):
-        attr = curses.A_BOLD if idx == 0 else curses.A_NORMAL
-        stdscr.addstr(y + 2 + idx, x + 3, line[: w - 6], attr)
+        left_col = [
+            ("BONSAI CONTROLS", True),
+            ("h/l : Switch active shelf pot", False),
+            ("w   : Water tree (resets thirst)", False),
+            ("f   : Fertilizer (+50% speed)", False),
+            ("c   : Wire branch (cycle style)", False),
+            ("x   : Prune mature / clear dead", False),
+            ("p   : Plant sapling in pot", False),
+            ("s   : Nursery & Zen shop", False),
+            ("i   : Inventory supplies", False),
+            ("?   : Toggle this guide", False),
+            ("", False),
+            ("STYLING & MATURITY", True),
+            ("Age : Up to +100% coin reward", False),
+            ("Wire: Formal, Informal, Cascade", False),
+        ]
+
+        right_col = [
+            ("COMMAND MODE (':')", True),
+            (":w       Save garden state", False),
+            (":q       Quit (:q! force)", False),
+            (":wq / :x Save and quit", False),
+            ("", False),
+            ("SEASONS & WEATHER", True),
+            ("🌸 Spring: Sakura +35% growth", False),
+            ("☀️ Summer: Juniper +20% growth", False),
+            ("🍁 Autumn: Maple +35% coins", False),
+            ("❄️ Winter: Pine resists cold", False),
+            ("🌧 Rain  : Auto-waters trees!", False),
+            ("", False),
+            ("Press Esc or q to return", False),
+        ]
+
+        for idx, (line, is_bold) in enumerate(left_col):
+            if y + 2 + idx < y + h - 1:
+                attr = curses.A_BOLD if is_bold else curses.A_NORMAL
+                stdscr.addstr(y + 2 + idx, x + 3, line[:33], attr)
+
+        rx = x + 38
+        avail_rw = max(10, w - (rx - x) - 3)
+        for idx, (line, is_bold) in enumerate(right_col):
+            if y + 2 + idx < y + h - 1:
+                attr = curses.A_BOLD if is_bold else curses.A_NORMAL
+                stdscr.addstr(y + 2 + idx, rx, line[:avail_rw], attr)
+    except curses.error:
+        pass
 

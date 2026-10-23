@@ -171,6 +171,16 @@ class TestSimulation(unittest.TestCase):
         update_plant(plant_fertilized, self.juniper_type, 1000.0, 1020.0)
         self.assertGreater(plant_fertilized.effective_growth_seconds, plant_normal.effective_growth_seconds)
 
+    def test_offline_fertilizer_not_diluted(self):
+        # 1 hour offline gap: healthy duration is 45s (juniper thirst_threshold), fertilizer is 60s
+        plant_normal = Plant(type_id="juniper", planted_at=1000.0, last_watered_at=1000.0)
+        plant_fertilized = Plant(type_id="juniper", planted_at=1000.0, last_watered_at=1000.0, fertilized_remaining_seconds=60.0)
+        update_plant(plant_normal, self.juniper_type, 1000.0, 4600.0)
+        update_plant(plant_fertilized, self.juniper_type, 1000.0, 4600.0)
+        # Normal gained: 45s (healthy) + 90s*0.25 (thirsty) = 67.5s
+        # Fertilized must gain substantial bonus (+50% during healthy 45s = +22.5s)
+        self.assertGreaterEqual(plant_fertilized.effective_growth_seconds - plant_normal.effective_growth_seconds, 20.0)
+
     def test_prune_seasonal_and_decor_bonuses(self):
         maple_type = PLANTS["maple"]
         plot = Plot(
@@ -239,6 +249,24 @@ class TestSimulation(unittest.TestCase):
         update_plant(plant_buffed, self.juniper_type, 1000.0, 1020.0, decorations=["furin_chime"])
         self.assertAlmostEqual(plant_normal.effective_growth_seconds, 20.0)
         self.assertAlmostEqual(plant_buffed.effective_growth_seconds, 20.0 * 1.15)
+
+
+
+    def test_season_and_weather_modulo_catchup(self):
+        from vimgarden.simulation import SEASON_DURATION, WEATHER_DURATION, update_weather_and_seasons
+        state = GameState()
+        state.season = Season.SPRING
+        state.season_timer = 100.0
+        state.weather_timer = 50.0
+
+        # Advance by 2 full seasons + 50s
+        delta = SEASON_DURATION * 2 + 50.0
+        update_weather_and_seasons(state, delta, current_time=2000.0)
+
+        # SPRING -> SUMMER -> AUTUMN
+        self.assertEqual(state.season, Season.AUTUMN)
+        self.assertAlmostEqual(state.season_timer, 150.0)
+        self.assertLess(state.weather_timer, WEATHER_DURATION)
 
 
 
