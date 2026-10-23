@@ -370,7 +370,7 @@ def main(stdscr: curses.window) -> None:
             available_seeds = [s for s, count in state.inventory.items() if count > 0 and s in PLANTS]
             context = {
                 "available_seeds": available_seeds,
-                "shop_items": list(SHOP_ITEMS.keys()),
+                "shop_items": list(PLANTS.keys()) + list(SHOP_ITEMS.keys()),
                 "inventory_items": list(state.inventory.items()),
             }
 
