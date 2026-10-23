@@ -1,7 +1,7 @@
 # vimgarden
 
 [![Release](https://img.shields.io/github/v/tag/ShwoubleTrouble/vimgarden?label=release&color=007ec6)](https://github.com/ShwoubleTrouble/vimgarden/releases)
-[![PyPI](https://img.shields.io/pypi/v/vimgarden.svg?color=007ec6)](https://pypi.org/project/vimgarden/)
+[![PyPI](https://img.shields.io/pypi/v/vimgarden)](https://pypi.org/project/vimgarden/)
 [![Python](https://img.shields.io/badge/python-3.10+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![CI](https://github.com/ShwoubleTrouble/vimgarden/actions/workflows/ci.yml/badge.svg)](https://github.com/ShwoubleTrouble/vimgarden/actions/workflows/ci.yml)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
@@ -9,7 +9,7 @@
 
 > Cultivate ancient bonsai trees in your terminal. Modal Vim controls, real-time seasons, organic ASCII art, and zero external dependencies.
 
-![vimgarden demo](assets/demo.gif)
+![vimgarden demo](https://raw.githubusercontent.com/ShwoubleTrouble/vimgarden/main/assets/demo.gif)
 
 ## Comparison with cbonsai
 
