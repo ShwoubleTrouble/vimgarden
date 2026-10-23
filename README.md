@@ -46,6 +46,17 @@ While [cbonsai](https://gitlab.com/jallbrit/cbonsai) is a fantastic procedural s
 
 ## Installation
 
+### Via uv
+
+```bash
+uv tool install vimgarden
+```
+
+Or run directly without installing:
+```bash
+uvx vimgarden
+```
+
 ### Via pipx (Recommended)
 
 ```bash
