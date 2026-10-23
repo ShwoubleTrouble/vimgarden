@@ -24,6 +24,10 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip build
 
+      - name: Run tests
+        run: |
+          python3 -m unittest discover -s tests
+
       - name: Build binary wheel and source tarball
         run: |
           python3 -m build

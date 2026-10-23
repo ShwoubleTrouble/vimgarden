@@ -78,7 +78,7 @@ SHOP_ITEMS: dict[str, dict[str, str | int]] = {
         "name": "Furin Wind Chime",
         "price": 60,
         "type": "decor",
-        "desc": "Soothes the bonsai with pleasant bell sounds",
+        "desc": "Soothes the bonsai with peaceful chime (+15% growth speed)",
     },
 }
 

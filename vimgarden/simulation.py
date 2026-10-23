@@ -62,6 +62,7 @@ def update_plant(
     t_to: float,
     is_offline_catchup: bool = False,
     season: Season = Season.SPRING,
+    decorations: Optional[list[str]] = None,
 ) -> None:
     """Advance single plant state from t_from to t_to."""
     if plant.health_state == HealthState.DEAD:
@@ -88,6 +89,10 @@ def update_plant(
         speed_mult += 0.25
     elif season == Season.WINTER and plant.type_id == "pine":
         speed_mult += 0.20
+
+    # Decor bonus (Furin chime)
+    if decorations and "furin_chime" in decorations:
+        speed_mult += 0.15
 
     # Fertilizer boost
     dt = max(0.0, t_to - t_from)
@@ -168,6 +173,7 @@ def update_simulation(state: GameState, current_time: float, is_offline_catchup:
                         t_to,
                         is_offline_catchup,
                         season=state.season,
+                        decorations=state.decorations,
                     )
 
     # 2. Advance seasons and weather; rain auto-waters plants at current_time

@@ -222,6 +222,24 @@ class TestSimulation(unittest.TestCase):
         self.assertEqual(format_tree_age(100.0, 100.0 + 86400.0 * 45), "1mo")
         self.assertEqual(format_tree_age(100.0, 100.0 + 86400.0 * 400), "1y")
 
+    def test_furin_chime_growth_bonus(self):
+        plant_normal = Plant(
+            type_id="juniper",
+            planted_at=1000.0,
+            last_watered_at=1000.0,
+            effective_growth_seconds=0.0,
+        )
+        plant_buffed = Plant(
+            type_id="juniper",
+            planted_at=1000.0,
+            last_watered_at=1000.0,
+            effective_growth_seconds=0.0,
+        )
+        update_plant(plant_normal, self.juniper_type, 1000.0, 1020.0, decorations=[])
+        update_plant(plant_buffed, self.juniper_type, 1000.0, 1020.0, decorations=["furin_chime"])
+        self.assertAlmostEqual(plant_normal.effective_growth_seconds, 20.0)
+        self.assertAlmostEqual(plant_buffed.effective_growth_seconds, 20.0 * 1.15)
+
 
 
 if __name__ == "__main__":
